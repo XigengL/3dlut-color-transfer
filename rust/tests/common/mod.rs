@@ -10,10 +10,16 @@ pub fn read_npy(path: &str) -> (Vec<usize>, Vec<f64>) {
     let (hlen, hstart) = if major == 1 {
         (u16::from_le_bytes([b[8], b[9]]) as usize, 10usize)
     } else {
-        (u32::from_le_bytes([b[8], b[9], b[10], b[11]]) as usize, 12usize)
+        (
+            u32::from_le_bytes([b[8], b[9], b[10], b[11]]) as usize,
+            12usize,
+        )
     };
     let header = std::str::from_utf8(&b[hstart..hstart + hlen]).unwrap();
-    assert!(header.contains("<f8"), "{path}: expected little-endian float64");
+    assert!(
+        header.contains("<f8"),
+        "{path}: expected little-endian float64"
+    );
     let ps = header.find("'shape':").expect("no shape") + 8;
     let open = header[ps..].find('(').expect("no (") + ps;
     let close = header[open..].find(')').expect("no )") + open;
@@ -31,10 +37,18 @@ pub fn read_npy(path: &str) -> (Vec<usize>, Vec<f64>) {
 }
 
 pub fn max_abs_diff(a: &[f64], b: &[f64]) -> f64 {
-    assert_eq!(a.len(), b.len(), "length mismatch {} vs {}", a.len(), b.len());
-    a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max)
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "length mismatch {} vs {}",
+        a.len(),
+        b.len()
+    );
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0, f64::max)
 }
-
 
 /// Returns `true` when the fixture exists.
 ///

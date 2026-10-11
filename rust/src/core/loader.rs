@@ -27,7 +27,10 @@ impl Img {
 }
 
 fn exif_orientation(path: &Path) -> u32 {
-    let f = match File::open(path) { Ok(f) => f, Err(_) => return 1 };
+    let f = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return 1,
+    };
     let mut r = BufReader::new(f);
     match Reader::new().read_from_container(&mut r) {
         Ok(exif) => exif
@@ -46,7 +49,7 @@ pub fn load_code(path: &str, target_max: usize) -> Result<Img, String> {
     let p = Path::new(path);
     let reader = ImageReader::open(p).map_err(|e| format!("{e}"))?;
     let reader = reader.with_guessed_format().map_err(|e| format!("{e}"))?;
-    let mut img = reader.decode().map_err(|e| format!("{e}"))?;
+    let img = reader.decode().map_err(|e| format!("{e}"))?;
 
     let rgb = img.to_rgb8();
     let (w0, h0) = (rgb.width() as usize, rgb.height() as usize);
@@ -63,12 +66,16 @@ pub fn load_code(path: &str, target_max: usize) -> Result<Img, String> {
     // the 2x2 DCT DC term are the same operation, so at these strides the two
     // implementations agree and the reported floor / ΔE are comparable.
     let mut stride = 1usize;
-    while w0.max(h0) / (stride * 2) >= target_max { stride *= 2; }
-    let (w, h) = ((w0 + stride - 1) / stride, (h0 + stride - 1) / stride);
+    while w0.max(h0) / (stride * 2) >= target_max {
+        stride *= 2;
+    }
+    let (w, h) = (w0.div_ceil(stride), h0.div_ceil(stride));
     let raw = rgb.as_raw();
     let mut data: Vec<f32> = vec![0.0; w * h * 3];
     if stride == 1 {
-        for (i, &v) in raw.iter().enumerate() { data[i] = v as f32 / 255.0; }
+        for (i, &v) in raw.iter().enumerate() {
+            data[i] = v as f32 / 255.0;
+        }
     } else {
         let inv = 1.0f32 / (stride * stride) as f32;
         for y in 0..h {
@@ -98,7 +105,7 @@ pub fn load_code(path: &str, target_max: usize) -> Result<Img, String> {
         data = apply_orientation(&data, w, h, o, &mut { 0usize });
     }
     let (nw, nh) = match o {
-        5 | 6 | 7 | 8 => (h, w),
+        5..=8 => (h, w),
         _ => (w, h),
     };
     Ok(Img { w: nw, h: nh, data })
@@ -111,7 +118,7 @@ fn get(d: &[f32], w: usize, h: usize, x: usize, y: usize) -> [f32; 3] {
 }
 
 fn apply_orientation(src: &[f32], w: usize, h: usize, o: u32, _: &mut usize) -> Vec<f32> {
-    let (nw, nh) = if matches!(o, 5 | 6 | 7 | 8) { (h, w) } else { (w, h) };
+    let (nw, nh) = if matches!(o, 5..=8) { (h, w) } else { (w, h) };
     let mut out = vec![0.0f32; nw * nh * 3];
     for y in 0..h {
         for x in 0..w {
@@ -145,7 +152,9 @@ pub fn build_mask(a: &Img, b: &Img, hi: f32, lo: f32, grad_pct: f32, dilate: usi
         let pb = b.px(i);
         let mx = pa[0].max(pa[1]).max(pa[2]).max(pb[0].max(pb[1]).max(pb[2]));
         let mn = pa[0].min(pa[1]).min(pa[2]).min(pb[0].min(pb[1]).min(pb[2]));
-        if mx >= hi || mn <= lo { m[i] = false; }
+        if mx >= hi || mn <= lo {
+            m[i] = false;
+        }
     }
     // gradient magnitude on luma
     let mut g = vec![0.0f32; n];
@@ -155,8 +164,16 @@ pub fn build_mask(a: &Img, b: &Img, hi: f32, lo: f32, grad_pct: f32, dilate: usi
     };
     for y in 0..a.h {
         for x in 0..a.w {
-            let (l, lx, ly) = (lum(a, x, y), lum(a, x.saturating_sub(1), y), lum(a, x, y.saturating_sub(1)));
-            let (m_, mx_, my_) = (lum(b, x, y), lum(b, x.saturating_sub(1), y), lum(b, x, y.saturating_sub(1)));
+            let (l, lx, ly) = (
+                lum(a, x, y),
+                lum(a, x.saturating_sub(1), y),
+                lum(a, x, y.saturating_sub(1)),
+            );
+            let (m_, mx_, my_) = (
+                lum(b, x, y),
+                lum(b, x.saturating_sub(1), y),
+                lum(b, x, y.saturating_sub(1)),
+            );
             let dx = (l - lx).abs().max((m_ - mx_).abs());
             let dy = (l - ly).abs().max((m_ - my_).abs());
             g[y * a.w + x] = (dx * dx + dy * dy).sqrt();
@@ -170,7 +187,9 @@ pub fn build_mask(a: &Img, b: &Img, hi: f32, lo: f32, grad_pct: f32, dilate: usi
         let prev = eg.clone();
         for y in 0..a.h {
             for x in 0..a.w {
-                if !prev[y * a.w + x] { continue; }
+                if !prev[y * a.w + x] {
+                    continue;
+                }
                 for dy in -1i32..=1 {
                     for dx in -1i32..=1 {
                         let ny = y as i32 + dy;
@@ -183,14 +202,23 @@ pub fn build_mask(a: &Img, b: &Img, hi: f32, lo: f32, grad_pct: f32, dilate: usi
             }
         }
     }
-    for i in 0..n { if eg[i] { m[i] = false; } }
+    for i in 0..n {
+        if eg[i] {
+            m[i] = false;
+        }
+    }
     m
 }
 
 /// Match files by case-insensitive *stem*, so extensions may differ.
 pub fn find_pairs(input_dir: &str, target_dir: &str) -> Vec<(String, String, String)> {
     use std::collections::HashMap;
-    let stem = |f: &str| Path::new(f).file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let stem = |f: &str| {
+        Path::new(f)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    };
     // Use Path::join rather than string concatenation: on Windows the separator is
     // `\`, and a folder path that already ends in a separator must not double up.
     let join = |dir: &str, file: &str| Path::new(dir).join(file).to_string_lossy().to_string();
@@ -198,14 +226,20 @@ pub fn find_pairs(input_dir: &str, target_dir: &str) -> Vec<(String, String, Str
     if let Ok(rd) = std::fs::read_dir(target_dir) {
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') { continue; }
+            if name.starts_with('.') {
+                continue;
+            }
             bmap.entry(stem(&name)).or_insert(name);
         }
     }
     let mut out = Vec::new();
     let mut files: Vec<String> = std::fs::read_dir(input_dir)
-        .map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| !n.starts_with('.')).collect())
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|n| !n.starts_with('.'))
+                .collect()
+        })
         .unwrap_or_default();
     files.sort();
     for f in files {

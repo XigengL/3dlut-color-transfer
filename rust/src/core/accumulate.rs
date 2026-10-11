@@ -48,14 +48,23 @@ pub fn build_statistics(
     let m = grid * grid * grid;
     let mut st = Stats {
         grid,
-        cnt: vec![0.0; m], sa: vec![0.0; m * 3], sb: vec![0.0; m * 3], sb2: vec![0.0; m * 3],
-        gray_cnt: vec![0.0; gray_levels], gray_sb: vec![0.0; gray_levels * 3],
-        gray_levels, per_pair: Vec::new(), skipped: Vec::new(), pixels: 0.0,
+        cnt: vec![0.0; m],
+        sa: vec![0.0; m * 3],
+        sb: vec![0.0; m * 3],
+        sb2: vec![0.0; m * 3],
+        gray_cnt: vec![0.0; gray_levels],
+        gray_sb: vec![0.0; gray_levels * 3],
+        gray_levels,
+        per_pair: Vec::new(),
+        skipped: Vec::new(),
+        pixels: 0.0,
     };
     const CHUNK: usize = 4;
     let mut done = 0usize;
     for chunk in pairs.chunks(CHUNK) {
-        if cancel() { break; }
+        if cancel() {
+            break;
+        }
         let decoded: Vec<Result<(Img, Img), String>> = chunk
             .par_iter()
             .map(|(_, pa, pb)| {
@@ -70,10 +79,15 @@ pub fn build_statistics(
 
         for ((name, _, _), d) in chunk.iter().zip(decoded) {
             done += 1;
-            if let Some(p) = progress.as_mut() { p(done, pairs.len(), name); }
+            if let Some(p) = progress.as_mut() {
+                p(done, pairs.len(), name);
+            }
             let (a, b) = match d {
                 Ok(v) => v,
-                Err(e) => { st.skipped.push((name.clone(), e)); continue; }
+                Err(e) => {
+                    st.skipped.push((name.clone(), e));
+                    continue;
+                }
             };
             let mask = build_mask(&a, &b, 0.98, 0.015, 90.0, 1);
             let n = a.w * a.h;
@@ -82,7 +96,9 @@ pub fn build_statistics(
             let mut lb_sum = 0.0f64;
             let mut abs_sum = 0.0f64;
             for i in 0..n {
-                if !mask[i] { continue; }
+                if !mask[i] {
+                    continue;
+                }
                 valid += 1;
                 let pa = a.px(i);
                 let pb = b.px(i);
@@ -98,7 +114,9 @@ pub fn build_statistics(
                     let l = pa[0] * REC709[0] + pa[1] * REC709[1] + pa[2] * REC709[2];
                     let lvl = ((l * gray_levels as f32) as usize).min(gray_levels - 1);
                     st.gray_cnt[lvl] += 1.0;
-                    for c in 0..3 { st.gray_sb[lvl * 3 + c] += pb[c] as f64; }
+                    for c in 0..3 {
+                        st.gray_sb[lvl * 3 + c] += pb[c] as f64;
+                    }
                 }
                 let la = pa[0] * REC709[0] + pa[1] * REC709[1] + pa[2] * REC709[2];
                 let lb = pb[0] * REC709[0] + pb[1] * REC709[1] + pb[2] * REC709[2];
@@ -107,12 +125,14 @@ pub fn build_statistics(
                 abs_sum += (lb - la).abs() as f64;
             }
             if valid < 1000 {
-                st.skipped.push((name.clone(), format!("有效像素仅 {valid}")));
+                st.skipped
+                    .push((name.clone(), format!("有效像素仅 {valid}")));
                 continue;
             }
             st.pixels += valid as f64;
             st.per_pair.push(PairStat {
-                name: name.clone(), pixels: valid,
+                name: name.clone(),
+                pixels: valid,
                 mean_abs: abs_sum / valid as f64,
                 luma_a: la_sum / valid as f64,
                 luma_b: lb_sum / valid as f64,
@@ -146,10 +166,20 @@ pub fn summarize(st: &Stats) -> Summary {
     let mut b_var = Vec::new();
     let mut total_px = 0.0f64;
     for i in 0..grid * grid * grid {
-        if st.cnt[i] <= 0.0 { continue; }
+        if st.cnt[i] <= 0.0 {
+            continue;
+        }
         total_px += st.cnt[i];
-        a_bar.push([st.sa[i * 3] / st.cnt[i], st.sa[i * 3 + 1] / st.cnt[i], st.sa[i * 3 + 2] / st.cnt[i]]);
-        let bb = [st.sb[i * 3] / st.cnt[i], st.sb[i * 3 + 1] / st.cnt[i], st.sb[i * 3 + 2] / st.cnt[i]];
+        a_bar.push([
+            st.sa[i * 3] / st.cnt[i],
+            st.sa[i * 3 + 1] / st.cnt[i],
+            st.sa[i * 3 + 2] / st.cnt[i],
+        ]);
+        let bb = [
+            st.sb[i * 3] / st.cnt[i],
+            st.sb[i * 3 + 1] / st.cnt[i],
+            st.sb[i * 3 + 2] / st.cnt[i],
+        ];
         b_bar.extend_from_slice(&bb);
         for c in 0..3 {
             b_var.push((st.sb2[i * 3 + c] / st.cnt[i] - bb[c] * bb[c]).max(0.0));
@@ -158,16 +188,22 @@ pub fn summarize(st: &Stats) -> Summary {
     }
     let total_nodes = grid * grid * grid;
     let mc = scaled_min_count(total_px);
-    let mut strong = 0usize;
     let mut mass = 0.0f64;
     for i in 0..w.len() {
-        if w[i] >= 50.0 { strong += 1; mass += w[i]; }
+        if w[i] >= 50.0 {
+            mass += w[i];
+        }
     }
     let n_occ = w.len();
     let coverage = n_occ as f64 / total_nodes as f64;
     Summary {
-        a_bar, b_bar, w, b_var,
-        min_count: mc, n_occ, total_nodes,
+        a_bar,
+        b_bar,
+        w,
+        b_var,
+        min_count: mc,
+        n_occ,
+        total_nodes,
         coverage,
         mass_coverage: mass / total_px.max(1e-9),
     }

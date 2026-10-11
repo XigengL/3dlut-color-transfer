@@ -23,10 +23,14 @@ fn offsets(n: usize) -> [[usize; 4]; 6] {
 fn case_of(f: [f64; 3]) -> usize {
     let mut o = [0usize, 1, 2];
     // stable descending sort of 3 elements
-    if f[o[1]] > f[o[0]] { o.swap(0, 1); }
+    if f[o[1]] > f[o[0]] {
+        o.swap(0, 1);
+    }
     if f[o[2]] > f[o[1]] {
         o.swap(1, 2);
-        if f[o[1]] > f[o[0]] { o.swap(0, 1); }
+        if f[o[1]] > f[o[0]] {
+            o.swap(0, 1);
+        }
     }
     match (o[0], o[1], o[2]) {
         (0, 1, 2) => 0, // fr >= fg >= fb
@@ -131,7 +135,9 @@ impl GridOperator {
             m: n * n * n,
             idx,
             w,
-            weights: weights.map(|x| x.to_vec()).unwrap_or_else(|| vec![1.0; nsamp]),
+            weights: weights
+                .map(|x| x.to_vec())
+                .unwrap_or_else(|| vec![1.0; nsamp]),
         }
     }
 
@@ -226,9 +232,12 @@ impl Laplacian {
                     let jp = if j + 1 == n { n - 1 } else { j + 1 };
                     let im = if i == 0 { 0 } else { i - 1 };
                     let ip = if i + 1 == n { n - 1 } else { i + 1 };
-                    let s = v[idx(km, j, i)] + v[idx(kp, j, i)]
-                          + v[idx(k, jm, i)] + v[idx(k, jp, i)]
-                          + v[idx(k, j, im)] + v[idx(k, j, ip)];
+                    let s = v[idx(km, j, i)]
+                        + v[idx(kp, j, i)]
+                        + v[idx(k, jm, i)]
+                        + v[idx(k, jp, i)]
+                        + v[idx(k, j, im)]
+                        + v[idx(k, j, ip)];
                     out[idx(k, j, i)] = 6.0 * v[idx(k, j, i)] - s;
                 }
             }

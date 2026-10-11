@@ -1,3 +1,9 @@
+#![allow(
+    clippy::field_reassign_with_default,
+    clippy::type_complexity,
+    clippy::chunks_exact_to_as_chunks,
+    clippy::needless_range_loop
+)]
 mod common;
 use common::{have, max_abs_diff, read_npy};
 
@@ -5,7 +11,9 @@ use lutfit::core::color::{code_to_lab, code_to_oklab, de00, decode_srgb, encode_
 
 #[test]
 fn ciede2000_matches_sharma_reference() {
-    if !have("tests/golden/de00_lab1.npy") { return; }
+    if !have("tests/golden/de00_lab1.npy") {
+        return;
+    }
     let (_, l1) = read_npy("tests/golden/de00_lab1.npy");
     let (_, l2) = read_npy("tests/golden/de00_lab2.npy");
     let (_, expect) = read_npy("tests/golden/de00_expect.npy");
@@ -14,7 +22,9 @@ fn ciede2000_matches_sharma_reference() {
         let a: Px = [l1[i * 3], l1[i * 3 + 1], l1[i * 3 + 2]];
         let b: Px = [l2[i * 3], l2[i * 3 + 1], l2[i * 3 + 2]];
         let d = (de00(a, b) - expect[i]).abs();
-        if d > worst { worst = d; }
+        if d > worst {
+            worst = d;
+        }
     }
     println!("CIEDE2000 与 Sharma 参考值最大偏差 = {worst:.6}");
     assert!(worst < 1e-4, "de00 mismatch {worst}");
@@ -22,12 +32,17 @@ fn ciede2000_matches_sharma_reference() {
 
 #[test]
 fn transfer_functions_match_python() {
-    if !have("tests/golden/color_code.npy") { return; }
+    if !have("tests/golden/color_code.npy") {
+        return;
+    }
     let (_, code) = read_npy("tests/golden/color_code.npy");
     let (_, lin) = read_npy("tests/golden/color_lin.npy");
     let (_, enc) = read_npy("tests/golden/color_enc.npy");
     let got_lin: Vec<f64> = code.iter().map(|&c| decode_srgb(c)).collect();
-    let got_enc: Vec<f64> = code.iter().map(|&c| encode_srgb(c.clamp(0.0, 1.0))).collect();
+    let got_enc: Vec<f64> = code
+        .iter()
+        .map(|&c| encode_srgb(c.clamp(0.0, 1.0)))
+        .collect();
     let d1 = max_abs_diff(&got_lin, &lin);
     let d2 = max_abs_diff(&got_enc, &enc);
     println!("decode_srgb 偏差 {d1:.3e}   encode_srgb 偏差 {d2:.3e}");
@@ -36,7 +51,9 @@ fn transfer_functions_match_python() {
 
 #[test]
 fn oklab_and_lab_match_python() {
-    if !have("tests/golden/color_code.npy") { return; }
+    if !have("tests/golden/color_code.npy") {
+        return;
+    }
     let (_, code) = read_npy("tests/golden/color_code.npy");
     let (_, ok_ref) = read_npy("tests/golden/color_oklab.npy");
     let (_, lab_ref) = read_npy("tests/golden/color_lab.npy");
@@ -56,7 +73,9 @@ fn oklab_and_lab_match_python() {
 
 #[test]
 fn tetra_scheme_matches_python() {
-    if !have("tests/golden/tetra_pts.npy") { return; }
+    if !have("tests/golden/tetra_pts.npy") {
+        return;
+    }
     use lutfit::core::tetra::tetra_scheme;
     let (shape, pts) = read_npy("tests/golden/tetra_pts.npy");
     let (_, idx_ref) = read_npy("tests/golden/tetra_idx.npy");
@@ -72,20 +91,26 @@ fn tetra_scheme_matches_python() {
     let mut wsum_worst = 0.0f64;
     for s in 0..np {
         for t in 0..4 {
-            if idx[s][t] as f64 != idx_ref[s * 4 + t] { idx_bad += 1; }
+            if idx[s][t] as f64 != idx_ref[s * 4 + t] {
+                idx_bad += 1;
+            }
             w_worst = w_worst.max((w[s][t] - w_ref[s * 4 + t]).abs());
         }
         let sum: f64 = w[s].iter().sum();
         wsum_worst = wsum_worst.max((sum - 1.0).abs());
     }
-    println!("四面体：索引不匹配 {idx_bad} 个，权重最大偏差 {w_worst:.3e}，权重和偏差 {wsum_worst:.3e}");
+    println!(
+        "四面体：索引不匹配 {idx_bad} 个，权重最大偏差 {w_worst:.3e}，权重和偏差 {wsum_worst:.3e}"
+    );
     assert_eq!(idx_bad, 0);
     assert!(w_worst < 1e-15 && wsum_worst < 1e-15);
 }
 
 #[test]
 fn tetra_identity_reproduces_input_exactly() {
-    if !have("tests/golden/tetra_pts.npy") { return; }
+    if !have("tests/golden/tetra_pts.npy") {
+        return;
+    }
     // Tetrahedral interpolation is exact for linear fields, so an identity LUT must
     // map every point to itself.
     use lutfit::core::tetra::{evaluate, nodes_flat};
@@ -97,7 +122,9 @@ fn tetra_identity_reproduces_input_exactly() {
     for &n in &[2usize, 5, 17, 33] {
         let x = nodes_flat(n);
         let y = evaluate(&x, &points, n);
-        let worst = (0..np * 3).map(|i| (y[i] - pts[i]).abs()).fold(0.0f64, f64::max);
+        let worst = (0..np * 3)
+            .map(|i| (y[i] - pts[i]).abs())
+            .fold(0.0f64, f64::max);
         println!("  n={n:2} 恒等 LUT 重构最大误差 {worst:.3e}");
         assert!(worst < 1e-11, "n={n} err {worst}");
     }
@@ -118,7 +145,9 @@ fn laplacian_annihilates_constant_and_linear_fields() {
         for node in 0..n * n * n {
             let interior = (0..3).all(|c| g[node * 3 + c] > 0.05 && g[node * 3 + c] < 0.95);
             if interior {
-                for c in 0..3 { worst = worst.max(lg[node * 3 + c].abs()); }
+                for c in 0..3 {
+                    worst = worst.max(lg[node * 3 + c].abs());
+                }
             }
         }
         println!("  n={n:2} 线性场内部最大二阶差分 {worst:.3e}");
@@ -147,22 +176,39 @@ fn end_to_end_matches_python_snapshot() {
             eprintln!("跳过：没有找到 {dir_in}（需要私有的图对素材）");
             continue;
         }
-        if !have(snap) { continue; }
+        if !have(snap) {
+            continue;
+        }
         let (_, expect) = read_npy(snap);
         let mut opts = PipelineOptions::default();
         opts.core = FitOptions::new(33);
         let cancel = || false;
         let mut stage = |_: &str, _: f64| {};
-        let mut pr = Progress { on_stage: &mut stage, cancel: &cancel };
+        let mut pr = Progress {
+            on_stage: &mut stage,
+            cancel: &cancel,
+        };
         let r = run_fit(dir_in, dir_tg, &opts, &mut pr).expect("fit");
         let mx = max_abs_diff(&r.lut, &expect);
-        let mean = r.lut.iter().zip(&expect).map(|(a, b)| (a - b).abs()).sum::<f64>()
+        let mean = r
+            .lut
+            .iter()
+            .zip(&expect)
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f64>()
             / r.lut.len() as f64;
-        let mut dev: Vec<f64> = r.lut.iter().zip(&expect).map(|(a, b)| (a - b).abs()).collect();
+        let mut dev: Vec<f64> = r
+            .lut
+            .iter()
+            .zip(&expect)
+            .map(|(a, b)| (a - b).abs())
+            .collect();
         dev.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let p999 = dev[(dev.len() as f64 * 0.999) as usize];
-        println!("{dir_in}: 平均偏差 {mean:.5}  99.9分位 {p999:.5}  最大 {mx:.5}  ΔE {:.2}",
-                 r.agg_mean);
+        println!(
+            "{dir_in}: 平均偏差 {mean:.5}  99.9分位 {p999:.5}  最大 {mx:.5}  ΔE {:.2}",
+            r.agg_mean
+        );
         // The preview sheet is drawn as one texture indexed by a single (w, h).  If any
         // preview keeps its own aspect ratio the columns after the first turn to
         // garbage — which is exactly what happened before this invariant was added.
@@ -176,16 +222,29 @@ fn end_to_end_matches_python_snapshot() {
         // The smoothing slider must be able to price itself without re-decoding the
         // dataset, which requires the cached eval pairs to have survived the parallel
         // preview pass (a thread-local there silently dropped most of them).
-        assert_eq!(r.eval_cache.pairs.len(), r.previews.len(),
-                   "{dir_in} 缓存的图对数与预览数不一致");
+        assert_eq!(
+            r.eval_cache.pairs.len(),
+            r.previews.len(),
+            "{dir_in} 缓存的图对数与预览数不一致"
+        );
         let base = lutfit::core::pipeline::mean_de(
-            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.0), &r.eval_cache, r.p3);
+            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.0),
+            &r.eval_cache,
+            r.p3,
+        );
         let sm = lutfit::core::pipeline::mean_de(
-            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.8), &r.eval_cache, r.p3);
+            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.8),
+            &r.eval_cache,
+            r.p3,
+        );
         println!("  精度代价: ΔE00 {base:.3} → {sm:.3}  ({:+.3})", sm - base);
         // The subset is deliberately biased toward the hardest pairs, so its absolute ΔE
         // is NOT comparable to the dataset-wide figure — only the cost is used.
-        assert!(base > r.agg_mean, "{dir_in} 子集应当比全体更难（{base} vs {}）", r.agg_mean);
+        assert!(
+            base > r.agg_mean,
+            "{dir_in} 子集应当比全体更难（{base} vs {}）",
+            r.agg_mean
+        );
         let cost = sm - base;
         assert!(cost.abs() < 0.25, "{dir_in} 平滑精度代价异常: {cost:+.3}");
 
@@ -193,10 +252,17 @@ fn end_to_end_matches_python_snapshot() {
         // accumulation were wrong this would drift.
         let fd = &r.floor_decomp;
         let rel = (fd.total - fd.within - fd.between).abs() / fd.total.max(1e-30);
-        println!("  下界分解: 图内 {:.1}%  图间 {:.1}%  (恒等式偏差 {:.2e})",
-                 fd.within_share() * 100.0, fd.between_share() * 100.0, rel);
+        println!(
+            "  下界分解: 图内 {:.1}%  图间 {:.1}%  (恒等式偏差 {:.2e})",
+            fd.within_share() * 100.0,
+            fd.between_share() * 100.0,
+            rel
+        );
         assert!(rel < 1e-9, "{dir_in} 方差分解恒等式不成立，偏差 {rel}");
-        assert!(fd.pixels > 0.0 && !fd.per_image.is_empty(), "{dir_in} 分解没有采到像素");
+        assert!(
+            fd.pixels > 0.0 && !fd.per_image.is_empty(),
+            "{dir_in} 分解没有采到像素"
+        );
 
         assert!(mean < 0.005, "{dir_in} 平均偏差过大 {mean}");
         assert!(p999 < 0.02, "{dir_in} 99.9 分位偏差过大 {p999}");
@@ -211,14 +277,19 @@ fn a_system_cjk_font_is_available() {
     use ab_glyph::{Font, FontRef};
     let mut found = Vec::new();
     for (path, idx) in lutfit::theme::cjk_candidates() {
-        let bytes = match std::fs::read(path) { Ok(b) => b, Err(_) => continue };
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
         let font = match FontRef::try_from_slice_and_index(&bytes, *idx) {
             Ok(f) => f,
             Err(_) => continue,
         };
         let mut ok = 0;
         for ch in ['中', '文', '图', '像', '像', '强', '度', '预', '检'] {
-            if font.glyph_id(ch).0 != 0 { ok += 1; }
+            if font.glyph_id(ch).0 != 0 {
+                ok += 1;
+            }
         }
         found.push(format!("{path}#{idx} -> {ok}/9 CJK glyphs"));
         if ok >= 9 {
@@ -226,7 +297,10 @@ fn a_system_cjk_font_is_available() {
             return;
         }
     }
-    eprintln!("跳过：本机没有含中文字形的系统字体。检查过：\n{}", found.join("\n"));
+    eprintln!(
+        "跳过：本机没有含中文字形的系统字体。检查过：\n{}",
+        found.join("\n")
+    );
     eprintln!("（CI 上可安装 fonts-noto-cjk 来启用这项检查）");
 }
 
@@ -234,12 +308,17 @@ fn a_system_cjk_font_is_available() {
 /// much (a LUT that no longer maps 0 to 0 is broken), and must be monotone in strength.
 #[test]
 fn smoothing_reduces_curvature() {
-    if !have("tests/golden/lut_ds1.npy") { return; }
+    if !have("tests/golden/lut_ds1.npy") {
+        return;
+    }
     use lutfit::core::project::{banding, max_second_difference, smooth_lut};
     let (_, lut) = read_npy("tests/golden/lut_ds1.npy");
     let n = 33;
     let base = max_second_difference(&lut, n);
-    println!("平滑前 色带风险(10bit) {:.2} 级", banding(&lut, n).levels_10bit());
+    println!(
+        "平滑前 色带风险(10bit) {:.2} 级",
+        banding(&lut, n).levels_10bit()
+    );
 
     let mut prev = f64::INFINITY;
     for s in [0.25f64, 0.5, 1.0] {
@@ -257,7 +336,10 @@ fn smoothing_reduces_curvature() {
                  b.levels_10bit(), b.levels_8bit(), end_drift, b.folds);
         assert!(sec < prev, "强度增加但曲率没有单调下降: {sec} !< {prev}");
         prev = sec;
-        assert!(end_drift < 0.02, "端点漂移过大 {end_drift}——LUT 不再把黑映射到黑");
+        assert!(
+            end_drift < 0.02,
+            "端点漂移过大 {end_drift}——LUT 不再把黑映射到黑"
+        );
     }
     assert!(prev < base, "最强平滑也没有降低曲率");
     println!("  平滑确实生效：{base:.5} -> {prev:.5}");
@@ -268,17 +350,16 @@ fn smoothing_reduces_curvature() {
 /// Guard the property that matters: the output must actually carry contrast.
 #[test]
 fn amplification_view_is_not_flat() {
-    if !have("tests/golden/lut_ds1.npy") { return; }
+    if !have("tests/golden/lut_ds1.npy") {
+        return;
+    }
     use lutfit::core::pipeline::apply_lut;
     use lutfit::core::project::{amplify_steps, smooth_lut};
     use lutfit::core::testchart::{sky, stripes, CH, CW, N_B, N_G};
 
     let (_, lut) = read_npy("tests/golden/lut_ds1.npy");
     let n = 33;
-    for (tag, chart) in [
-        ("全色域", stripes(CW, CH, N_G, N_B)),
-        ("天空", sky(CW, CH)),
-    ] {
+    for (tag, chart) in [("全色域", stripes(CW, CH, N_G, N_B)), ("天空", sky(CW, CH))] {
         for s in [0.0f64, 0.5] {
             let x = smooth_lut(&lut, n, s);
             let pred = apply_lut(&x, &chart, n);
@@ -287,16 +368,27 @@ fn amplification_view_is_not_flat() {
             let mean = g.iter().sum::<f64>() / g.len() as f64;
             let sd = (g.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / g.len() as f64).sqrt();
             // 用 1..254 之间的像素占比衡量"是否真的画出了东西"
-            let usable = g.iter().filter(|&&v| v > 4.0 && v < 251.0).count() as f64 / g.len() as f64;
+            let usable =
+                g.iter().filter(|&&v| v > 4.0 && v < 251.0).count() as f64 / g.len() as f64;
             println!("  {tag} 平滑{s:.1}: 增益×{gain:.0}  残差峰值 {peak:.2e}  灰度标准差 {sd:.1}  有效像素 {:.1}%",
                      usable * 100.0);
-            assert!(sd > 3.0, "{tag} 平滑{s} 的放大图几乎是平的（标准差 {sd:.2}）");
-            assert!(usable > 0.02, "{tag} 平滑{s} 的放大图饱和了（有效像素仅 {:.1}%）", usable * 100.0);
+            assert!(
+                sd > 3.0,
+                "{tag} 平滑{s} 的放大图几乎是平的（标准差 {sd:.2}）"
+            );
+            assert!(
+                usable > 0.02,
+                "{tag} 平滑{s} 的放大图饱和了（有效像素仅 {:.1}%）",
+                usable * 100.0
+            );
             // A hard edge anywhere in the chart would make the residual peak orders of
             // magnitude larger than the LUT's curvature, and the auto-gain would then
             // scale the real banding down to a flat field.
             if tag == "全色域" {
-                assert!(peak < 0.05, "{tag} 残差峰值 {peak:.2e} 过大——说明测试图里有硬边");
+                assert!(
+                    peak < 0.05,
+                    "{tag} 残差峰值 {peak:.2e} 过大——说明测试图里有硬边"
+                );
             }
         }
     }
@@ -308,9 +400,14 @@ fn amplification_view_is_not_flat() {
 fn sky_ramp_has_usable_range() {
     use lutfit::core::testchart::{sky, CH, CW};
     let s = sky(CW, CH);
-    let lum = |i: usize| 0.2126 * s[i * 3] as f64 + 0.7152 * s[i * 3 + 1] as f64 + 0.0722 * s[i * 3 + 2] as f64;
+    let lum = |i: usize| {
+        0.2126 * s[i * 3] as f64 + 0.7152 * s[i * 3 + 1] as f64 + 0.0722 * s[i * 3 + 2] as f64
+    };
     let top = lum(0);
     let bot = lum(CW * (CH - 1));
-    println!("  天空亮度范围 {top:.3} → {bot:.3}（跨度 {:.3}）", (bot - top).abs());
+    println!(
+        "  天空亮度范围 {top:.3} → {bot:.3}（跨度 {:.3}）",
+        (bot - top).abs()
+    );
     assert!((bot - top).abs() > 0.35, "天空渐变范围太窄，LUT 作用不起来");
 }

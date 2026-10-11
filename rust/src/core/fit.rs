@@ -2,8 +2,8 @@
 //! regularisation on the final level.  Ported from `lutfit/fit.py`.
 
 use crate::core::project::{
-    artifact_metrics, enforce_monotone, fold_report, polish_lut, repair_folds,
-    JacobianPenalty, PenaltyWeights,
+    artifact_metrics, enforce_monotone, fold_report, polish_lut, repair_folds, JacobianPenalty,
+    PenaltyWeights,
 };
 use crate::core::tetra::{evaluate, nodes_flat, GridOperator, Laplacian};
 
@@ -112,18 +112,30 @@ fn pcg_free<F: Fn(&[f64]) -> Vec<f64>>(
             ap[i] = if free[i] { ap_raw[i] } else { 0.0 };
         }
         let denom = dot(&p, &ap);
-        if denom <= 0.0 { break; }
+        if denom <= 0.0 {
+            break;
+        }
         let alpha = rz / denom;
-        for i in 0..n { x[i] += alpha * p[i]; }
-        for i in 0..n { r[i] -= alpha * ap[i]; }
-        if dot(&r, &r).sqrt() <= tol * bnorm { break; }
+        for i in 0..n {
+            x[i] += alpha * p[i];
+        }
+        for i in 0..n {
+            r[i] -= alpha * ap[i];
+        }
+        if dot(&r, &r).sqrt() <= tol * bnorm {
+            break;
+        }
         for i in 0..n {
             z[i] = if free[i] { r[i] / diag[i] } else { 0.0 };
         }
         let rz_new = dot(&r, &z);
-        if rz <= 0.0 { break; }
+        if rz <= 0.0 {
+            break;
+        }
         let beta = rz_new / rz;
-        for i in 0..n { p[i] = z[i] + beta * p[i]; }
+        for i in 0..n {
+            p[i] = z[i] + beta * p[i];
+        }
         rz = rz_new;
     }
     x
@@ -162,7 +174,9 @@ pub fn pcg_box_from<F: Fn(&[f64]) -> Vec<f64>>(
         Some(v) => v.to_vec(),
         None => vec![0.0; n],
     };
-    for v in x.iter_mut() { *v = v.clamp(lo, hi); }
+    for v in x.iter_mut() {
+        *v = v.clamp(lo, hi);
+    }
     let mut prev_active: Option<Vec<bool>> = None;
     for _ in 0..outer {
         let g = matvec(&x);
@@ -174,24 +188,38 @@ pub fn pcg_box_from<F: Fn(&[f64]) -> Vec<f64>>(
             }
         }
         if let Some(pa) = &prev_active {
-            if *pa == active { break; }
+            if *pa == active {
+                break;
+            }
         }
         prev_active = Some(active.clone());
         let free: Vec<bool> = active.iter().map(|a| !a).collect();
-        if !free.iter().any(|&f| f) { break; }
+        if !free.iter().any(|&f| f) {
+            break;
+        }
         x = pcg_free(matvec, b, diag, &x, &free, maxiter, 1e-8);
-        for v in x.iter_mut() { *v = v.clamp(lo, hi); }
+        for v in x.iter_mut() {
+            *v = v.clamp(lo, hi);
+        }
     }
-    for v in x.iter_mut() { *v = v.clamp(lo, hi); }
+    for v in x.iter_mut() {
+        *v = v.clamp(lo, hi);
+    }
     x
 }
 
 // ----------------------------------------------------------------- priors ---
 pub fn interp(t: &[f64], v: &[f64], q: f64) -> f64 {
-    if q <= t[0] { return v[0]; }
-    if q >= t[t.len() - 1] { return v[v.len() - 1]; }
+    if q <= t[0] {
+        return v[0];
+    }
+    if q >= t[t.len() - 1] {
+        return v[v.len() - 1];
+    }
     let mut lo = 0usize;
-    while lo + 1 < t.len() && t[lo + 1] < q { lo += 1; }
+    while lo + 1 < t.len() && t[lo + 1] < q {
+        lo += 1;
+    }
     let t0 = t[lo];
     let t1 = t[lo + 1];
     let w = if t1 > t0 { (q - t0) / (t1 - t0) } else { 0.0 };
@@ -209,15 +237,24 @@ pub fn neutral_targets(n: usize, gc: &GrayCurve, chroma_max: f64) -> (Vec<f64>, 
     let m = n * n * n;
     let mut g = vec![0.0; m * 3];
     let mut wg = vec![0.0; m];
-    let tv: Vec<f64> = (0..gc.t.len()).collect::<Vec<_>>().iter().map(|&i| gc.t[i]).collect();
+    let tv: Vec<f64> = (0..gc.t.len())
+        .collect::<Vec<_>>()
+        .iter()
+        .map(|&i| gc.t[i])
+        .collect();
     for nd in 0..m {
-        let luma = coords[nd * 3] * 0.2126 + coords[nd * 3 + 1] * 0.7152 + coords[nd * 3 + 2] * 0.0722;
+        let luma =
+            coords[nd * 3] * 0.2126 + coords[nd * 3 + 1] * 0.7152 + coords[nd * 3 + 2] * 0.0722;
         for c in 0..3 {
             let col: Vec<f64> = (0..gc.t.len()).map(|i| gc.v[i * 3 + c]).collect();
             g[nd * 3 + c] = interp(&tv, &col, luma);
         }
-        let chroma = coords[nd * 3].max(coords[nd * 3 + 1]).max(coords[nd * 3 + 2])
-            - coords[nd * 3].min(coords[nd * 3 + 1]).min(coords[nd * 3 + 2]);
+        let chroma = coords[nd * 3]
+            .max(coords[nd * 3 + 1])
+            .max(coords[nd * 3 + 2])
+            - coords[nd * 3]
+                .min(coords[nd * 3 + 1])
+                .min(coords[nd * 3 + 2]);
         wg[nd] = (1.0 - chroma / chroma_max).clamp(0.0, 1.0);
     }
     for i in 0..n {
@@ -239,7 +276,11 @@ pub fn support_prior(op: &GridOperator) -> Vec<f64> {
         .filter(|&v| v > 0.0)
         .collect();
     positives.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let d0 = if positives.is_empty() { 1.0 } else { positives[positives.len() / 2] };
+    let d0 = if positives.is_empty() {
+        1.0
+    } else {
+        positives[positives.len() / 2]
+    };
     (0..op.m)
         .map(|i| {
             let di = (d[i * 3] + d[i * 3 + 1] + d[i * 3 + 2]) / 3.0;
@@ -258,8 +299,6 @@ struct Problem<'a> {
     wp_eff: Vec<f64>,
     wg_eff: Vec<f64>,
     mu_eff: f64,
-    b_rhs: Vec<f64>,
-    pre: Vec<f64>,
     weights: Option<PenaltyWeights>,
 }
 
@@ -268,7 +307,11 @@ impl<'a> Problem<'a> {
         MATVEC_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let n = x.len();
         let norm = self.op.normal(x);
-        let l = if self.lam_eff != 0.0 { self.lap.normal(x) } else { vec![0.0; n] };
+        let l = if self.lam_eff != 0.0 {
+            self.lap.normal(x)
+        } else {
+            vec![0.0; n]
+        };
         let pen = match &self.weights {
             Some(w) => self.pen.apply(x, w),
             None => vec![0.0; n],
@@ -315,7 +358,11 @@ fn fit_level(
     let d = op.diag();
     let mut positives: Vec<f64> = d.iter().cloned().filter(|&v| v > 0.0).collect();
     positives.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let d0 = if positives.is_empty() { 1.0 } else { positives[positives.len() / 2] };
+    let d0 = if positives.is_empty() {
+        1.0
+    } else {
+        positives[positives.len() / 2]
+    };
     let unit = d0 / w_sum;
 
     let wp_eff: Vec<f64> = (0..m * 3).map(|i| wp[i / 3] * beta * unit).collect();
@@ -335,11 +382,14 @@ fn fit_level(
     let mut weights: Option<PenaltyWeights> = None;
     for it in 0..mono_outer.max(1) {
         let prob = Problem {
-            op, lap, pen, w_sum, lam_eff,
-            wp_eff: wp_eff.clone(), wg_eff: wg_eff.clone(),
+            op,
+            lap,
+            pen,
+            w_sum,
+            lam_eff,
+            wp_eff: wp_eff.clone(),
+            wg_eff: wg_eff.clone(),
             mu_eff,
-            b_rhs: b_rhs.clone(),
-            pre: pre0.clone(),
             weights: weights.clone(),
         };
         let mv = |v: &[f64]| prob.matvec(v);
@@ -347,16 +397,30 @@ fn fit_level(
         if mu_eff != 0.0 {
             if let Some(wt) = &weights {
                 let pd = pen.diag(wt);
-                for i in 0..m * 3 { pre_it[i] += mu_eff * pd[i]; }
+                for i in 0..m * 3 {
+                    pre_it[i] += mu_eff * pd[i];
+                }
             }
         }
-        x = pcg_box_from(&mv, &b_rhs, &pre_it, 0.0, 1.0, maxiter, 12,
-                         if it == 0 { None } else { Some(&x) });
-        if mono_mu <= 0.0 { break; }
+        x = pcg_box_from(
+            &mv,
+            &b_rhs,
+            &pre_it,
+            0.0,
+            1.0,
+            maxiter,
+            12,
+            if it == 0 { None } else { Some(&x) },
+        );
+        if mono_mu <= 0.0 {
+            break;
+        }
         let wnew = pen.active_weights(&x, mono_floor);
         let viol = wnew.n_viol;
         weights = Some(wnew);
-        if viol == 0 { break; }
+        if viol == 0 {
+            break;
+        }
         let _ = it;
     }
     LevelSolution { x, d0, unit }
@@ -384,7 +448,7 @@ pub fn fit_multiscale(
 ) -> FitResultCore {
     let levels = &opts.levels;
     let final_n = *levels.last().unwrap();
-    let pen = JacobianPenalty::new(final_n);
+    let _pen = JacobianPenalty::new(final_n);
     let mut x: Option<Vec<f64>> = None;
     let mut trials: Vec<TrialRecord> = Vec::new();
     let mut chosen = 0usize;
@@ -393,7 +457,9 @@ pub fn fit_multiscale(
 
     for (li, &n) in levels.iter().enumerate() {
         if let Some(p) = progress.as_mut() {
-            if (p.cancel)() { break; }
+            if (p.cancel)() {
+                break;
+            }
             (p.on_level)(li, levels.len(), n);
         }
         let m = n * n * n;
@@ -417,9 +483,24 @@ pub fn fit_multiscale(
         };
         let is_final = li == levels.len() - 1;
         if !is_final {
-            let sol = fit_level(&op, &lap, &pn, b_bar, w, &x_ref, &wp, &g, &wg,
-                                opts.lam_s, opts.beta, opts.gamma, opts.mono_mu,
-                                opts.mono_floor, opts.mono_outer, opts.maxiter);
+            let sol = fit_level(
+                &op,
+                &lap,
+                &pn,
+                b_bar,
+                w,
+                &x_ref,
+                &wp,
+                &g,
+                &wg,
+                opts.lam_s,
+                opts.beta,
+                opts.gamma,
+                opts.mono_mu,
+                opts.mono_floor,
+                opts.mono_outer,
+                opts.maxiter,
+            );
             x = Some(sol.x);
             continue;
         }
@@ -427,19 +508,39 @@ pub fn fit_multiscale(
         // ---- final level: adaptive regularisation ----
         let mut ls = opts.lam_s;
         let mut mu = opts.mono_mu;
-        let n_trials = if opts.adaptive { opts.max_trials.max(1) } else { 1 };
+        let n_trials = if opts.adaptive {
+            opts.max_trials.max(1)
+        } else {
+            1
+        };
         let fold_target = (opts.fold_tol_frac * ((final_n - 1).pow(3)) as f64) as usize;
         let mut best: Option<(Vec<f64>, usize, usize, f64)> = None; // x, folds, luma_viol, max_second
         for trial in 0..n_trials {
             if let Some(p) = progress.as_mut() {
-                if (p.cancel)() { break; }
+                if (p.cancel)() {
+                    break;
+                }
                 (p.on_trial)(trial, ls, 0);
             }
-            let sol = fit_level(&op, &lap, &pn, b_bar, w, &x_ref, &wp, &g, &wg,
-                                ls, opts.beta, opts.gamma, mu, opts.mono_floor,
-                                opts.mono_outer, opts.maxiter);
-            let (y, _hist) = polish_lut(&sol.x, final_n, 4, opts.repair_folds, 0.02,
-                                        opts.p3, &[]);
+            let sol = fit_level(
+                &op,
+                &lap,
+                &pn,
+                b_bar,
+                w,
+                &x_ref,
+                &wp,
+                &g,
+                &wg,
+                ls,
+                opts.beta,
+                opts.gamma,
+                mu,
+                opts.mono_floor,
+                opts.mono_outer,
+                opts.maxiter,
+            );
+            let (y, _hist) = polish_lut(&sol.x, final_n, 4, opts.repair_folds, 0.02, opts.p3, &[]);
             let am = artifact_metrics(&y, final_n);
             let r = evaluate(&y, a_bar, final_n);
             let rr: Vec<f64> = (0..r.len()).map(|i| r[i] - b_bar[i]).collect();
@@ -450,21 +551,29 @@ pub fn fit_multiscale(
                 / ws;
             let model = model.sqrt();
             trials.push(TrialRecord {
-                trial, lam_s: ls, mono_mu: mu, folds: am.folds, min_det: am.min_det,
-                luma_viol: am.luma_viol, max_second: am.max_second, model,
+                trial,
+                lam_s: ls,
+                mono_mu: mu,
+                folds: am.folds,
+                min_det: am.min_det,
+                luma_viol: am.luma_viol,
+                max_second: am.max_second,
+                model,
             });
             let key = (am.folds, am.luma_viol, am.max_second);
-            let better = best.as_ref().map_or(true, |b| {
-                key < (b.1, b.2, b.3)
-            });
+            let better = best.as_ref().is_none_or(|b| key < (b.1, b.2, b.3));
             if better {
                 best = Some((y.clone(), am.folds, am.luma_viol, am.max_second));
                 chosen = trial;
                 chosen_ls = ls;
                 chosen_model = model;
             }
-            if am.folds <= fold_target { break; }
-            if trial > 0 && am.folds >= trials[trial - 1].folds { break; }
+            if am.folds <= fold_target {
+                break;
+            }
+            if trial > 0 && am.folds >= trials[trial - 1].folds {
+                break;
+            }
             ls *= 2.0;
             mu *= 2.0;
         }
@@ -483,7 +592,10 @@ pub fn fit_multiscale(
 /// Convenience wrapper doing the post-processing and returning the finished LUT.
 pub fn finish_lut(lut: &[f64], n: usize, repair_folds_iters: usize, p3: bool) -> Vec<f64> {
     let (y, _h) = polish_lut(lut, n, 4, repair_folds_iters, 0.02, p3, &[]);
-    let _ = (fold_report(&y, n).n_folded_cells, enforce_monotone(&y, n, 8),
-             repair_folds(&y, n, repair_folds_iters, 0.02, 0.6));
+    let _ = (
+        fold_report(&y, n).n_folded_cells,
+        enforce_monotone(&y, n, 8),
+        repair_folds(&y, n, repair_folds_iters, 0.02, 0.6),
+    );
     y
 }

@@ -29,7 +29,10 @@ fn gb(i: usize, ng: usize, nb: usize) -> (f32, f32) {
     let i = i.min(ng * nb - 1);
     let (row, col) = (i / ng, i % ng);
     let c = if row % 2 == 0 { col } else { ng - 1 - col };
-    (c as f32 / (ng - 1) as f32, row as f32 / (nb - 1).max(1) as f32)
+    (
+        c as f32 / (ng - 1) as f32,
+        row as f32 / (nb - 1).max(1) as f32,
+    )
 }
 
 /// Stripes with a smooth cross-fade instead of a hard edge.
@@ -112,7 +115,11 @@ pub fn to_rgb8(v: &[f64], w: usize, h: usize, dither: bool) -> Vec<u8> {
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 3;
-            let t = if dither { (BAYER8[y & 7][x & 7] as f64 / 64.0 - 0.5) / 255.0 } else { 0.0 };
+            let t = if dither {
+                (BAYER8[y & 7][x & 7] as f64 / 64.0 - 0.5) / 255.0
+            } else {
+                0.0
+            };
             for c in 0..3 {
                 out[i + c] = ((v[i + c] + t).clamp(0.0, 1.0) * 255.0) as u8;
             }

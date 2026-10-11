@@ -10,14 +10,26 @@ use eframe::egui;
 use egui::{Color32, RichText};
 
 use crate::core::fit::FitOptions;
-use crate::core::pipeline::{apply_lut, export, final_lut, mean_de, run_fit, strength_preview, FitResult, PipelineOptions, Progress, Preview};
+use crate::core::pipeline::{
+    apply_lut, export, final_lut, mean_de, run_fit, strength_preview, FitResult, PipelineOptions,
+    Preview, Progress,
+};
 use crate::core::project::{amplify_steps, max_second_difference, smooth_lut};
-use crate::core::testchart::{self, to_rgb8, CW, CH, N_B, N_G};
+use crate::core::testchart::{self, to_rgb8, CH, CW, N_B, N_G};
 use crate::theme as th;
 
-enum Msg { Progress(String, f64), Done(Box<FitResult>), Err(String) }
+enum Msg {
+    Progress(String, f64),
+    Done(Box<FitResult>),
+    Err(String),
+}
 
-enum State { Idle, Running(f64, String), Done, Error(String) }
+enum State {
+    Idle,
+    Running(f64, String),
+    Done,
+    Error(String),
+}
 
 pub struct LutApp {
     in_dir: String,
@@ -32,7 +44,6 @@ pub struct LutApp {
     result: Option<FitResult>,
     tex: Option<egui::TextureHandle>,
     tex_strength: f32,
-    tex_smooth: Option<f32>,
     tex_key: (u32, u32),
     tex_dims: (usize, usize),
     sized: bool,
@@ -68,12 +79,14 @@ impl Default for LutApp {
             result: None,
             tex: None,
             tex_strength: -1.0,
-            tex_smooth: None,
             tex_key: (u32::MAX, u32::MAX),
             tex_dims: (0, 0),
             sized: false,
             scrolled: false,
-            smooth: std::env::var("LUTFIT_SMOOTH").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0),
+            smooth: std::env::var("LUTFIT_SMOOTH")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0),
             dither: std::env::var("LUTFIT_DITHER").is_ok(),
             chart: testchart::stripes(CW, CH, N_G, N_B),
             chart_tex: None,
@@ -110,7 +123,12 @@ impl LutApp {
     }
 
     fn start(&mut self) {
-        let (ind, tgt, size, neutral) = (self.in_dir.clone(), self.out_dir.clone(), self.lut_size, self.preserve_neutral);
+        let (ind, tgt, size, neutral) = (
+            self.in_dir.clone(),
+            self.out_dir.clone(),
+            self.lut_size,
+            self.preserve_neutral,
+        );
         let (tx, rx) = channel();
         self.rx = Some(rx);
         self.cancel = Arc::new(AtomicBool::new(false));
@@ -126,24 +144,40 @@ impl LutApp {
             let mut core = FitOptions::new(size);
             core.preserve_neutral = neutral;
             opts.core = core;
-            let mut on_stage = |msg: &str, f: f64| { let _ = tx.send(Msg::Progress(msg.to_string(), f)); };
+            let mut on_stage = |msg: &str, f: f64| {
+                let _ = tx.send(Msg::Progress(msg.to_string(), f));
+            };
             let cancelf = move || cancel.load(Ordering::Relaxed);
-            let mut pr = Progress { on_stage: &mut on_stage, cancel: &cancelf };
+            let mut pr = Progress {
+                on_stage: &mut on_stage,
+                cancel: &cancelf,
+            };
             match run_fit(&ind, &tgt, &opts, &mut pr) {
-                Ok(r) => { let _ = tx.send(Msg::Done(Box::new(r))); }
-                Err(e) => { let _ = tx.send(Msg::Err(e)); }
+                Ok(r) => {
+                    let _ = tx.send(Msg::Done(Box::new(r)));
+                }
+                Err(e) => {
+                    let _ = tx.send(Msg::Err(e));
+                }
             }
         });
     }
 
     fn poll(&mut self) {
-        let msgs: Vec<Msg> = match &self.rx { Some(rx) => rx.try_iter().collect(), None => return };
+        let msgs: Vec<Msg> = match &self.rx {
+            Some(rx) => rx.try_iter().collect(),
+            None => return,
+        };
         for m in msgs {
             match m {
                 Msg::Progress(msg, f) => self.state = State::Running(f, msg),
                 Msg::Done(r) => {
                     self.state = State::Done;
-                    let base = mean_de(&final_lut(&r, self.strength as f64, 0.0), &r.eval_cache, r.p3);
+                    let base = mean_de(
+                        &final_lut(&r, self.strength as f64, 0.0),
+                        &r.eval_cache,
+                        r.p3,
+                    );
                     self.de_smooth = Some(base);
                     self.de_baseline = Some(base);
                     self.de_key = (self.strength.to_bits(), 0);
@@ -152,7 +186,10 @@ impl LutApp {
                     self.tex_strength = -1.0;
                     self.rx = None;
                 }
-                Msg::Err(e) => { self.state = State::Error(e); self.rx = None; }
+                Msg::Err(e) => {
+                    self.state = State::Error(e);
+                    self.rx = None;
+                }
             }
         }
     }
@@ -160,12 +197,19 @@ impl LutApp {
     /// Build the five-up contact sheet: one column per preview, three bands each
     /// (A on top, A+LUT in the middle, B at the bottom).
     fn refresh_texture(&mut self, ctx: &egui::Context) {
-        let res = match &self.result { Some(r) => r, None => return };
-        if res.previews.is_empty() { return; }
+        let res = match &self.result {
+            Some(r) => r,
+            None => return,
+        };
+        if res.previews.is_empty() {
+            return;
+        }
         let alpha = self.strength;
         let sm = self.smooth;
         let key = (alpha.to_bits(), sm.to_bits());
-        if self.tex_key == key && self.tex.is_some() { return; }
+        if self.tex_key == key && self.tex.is_some() {
+            return;
+        }
         let x = final_lut(res, alpha as f64, sm as f64);
         let n = res.n;
 
@@ -197,8 +241,11 @@ impl LutApp {
                 }
             }
         }
-        self.tex = Some(ctx.load_texture("sheet", egui::ColorImage::from_rgb([tw, th_], &buf),
-                                         egui::TextureOptions::LINEAR));
+        self.tex = Some(ctx.load_texture(
+            "sheet",
+            egui::ColorImage::from_rgb([tw, th_], &buf),
+            egui::TextureOptions::LINEAR,
+        ));
         self.tex_strength = alpha;
         self.tex_dims = (tw, th_);
     }
@@ -210,18 +257,34 @@ impl LutApp {
     fn refresh_chart(&mut self, ctx: &egui::Context) {
         let res = match &self.result {
             Some(r) => r,
-            None => { self.chart_tex = None; self.chart_sm_tex = None; return; }
+            None => {
+                self.chart_tex = None;
+                self.chart_sm_tex = None;
+                return;
+            }
         };
-        let key = (self.smooth.to_bits(), self.dither, self.strength.to_bits(),
-                   self.sky_mode as u32);
-        if key == self.chart_key && self.chart_tex.is_some() { return; }
+        let key = (
+            self.smooth.to_bits(),
+            self.dither,
+            self.strength.to_bits(),
+            self.sky_mode as u32,
+        );
+        if key == self.chart_key && self.chart_tex.is_some() {
+            return;
+        }
         let n = res.n;
         let base = strength_preview(res, self.strength as f64);
         let mk = |ctx: &egui::Context, name: &str, x: &[f64], chart: &[f32], n: usize, d: bool| {
             let pred = apply_lut(x, chart, n);
             let rgb = to_rgb8(&pred, CW, CH, d);
-            (ctx.load_texture(name, egui::ColorImage::from_rgb([CW, CH], &rgb),
-                              egui::TextureOptions::NEAREST), pred)
+            (
+                ctx.load_texture(
+                    name,
+                    egui::ColorImage::from_rgb([CW, CH], &rgb),
+                    egui::TextureOptions::NEAREST,
+                ),
+                pred,
+            )
         };
         let (t0, _) = mk(ctx, "chart_raw", &base, &self.chart, n, self.dither);
         let sm = smooth_lut(&base, n, self.smooth as f64);
@@ -230,9 +293,11 @@ impl LutApp {
         self.chart_sm_tex = Some(t1);
         let (amp, gain, peak) = amplify_steps(&p1, CW, CH, 0.45);
         self.amp_gain = Some((gain, peak));
-        self.amp_tex = Some(ctx.load_texture("chart_amp",
+        self.amp_tex = Some(ctx.load_texture(
+            "chart_amp",
             egui::ColorImage::from_rgb([CW, CH], &amp),
-            egui::TextureOptions::NEAREST));
+            egui::TextureOptions::NEAREST,
+        ));
         self.chart_key = key;
     }
 }
@@ -240,8 +305,14 @@ impl LutApp {
 /// A labelled row of the pre-flight card: what it is, the number, and why it matters.
 fn metric(ui: &mut egui::Ui, name: &str, value: &str, note: &str, color: Color32) {
     ui.horizontal(|ui| {
-        ui.add_sized([150.0, 20.0], egui::Label::new(RichText::new(name).color(th::TEXT_DIM).size(13.0)));
-        ui.add_sized([92.0, 20.0], egui::Label::new(RichText::new(value).size(15.0).strong().color(color)));
+        ui.add_sized(
+            [150.0, 20.0],
+            egui::Label::new(RichText::new(name).color(th::TEXT_DIM).size(13.0)),
+        );
+        ui.add_sized(
+            [92.0, 20.0],
+            egui::Label::new(RichText::new(value).size(15.0).strong().color(color)),
+        );
         ui.label(RichText::new(note).size(12.0).color(th::TEXT_DIM));
     });
 }
@@ -263,21 +334,29 @@ impl eframe::App for LutApp {
             if std::env::var("LUTFIT_H").is_err() {
                 if let Some(mon) = ctx.input(|i| i.viewport().monitor_size) {
                     let want = egui::vec2(1320.0, (mon.y * 0.86).min(900.0));
-                    if mon.y > 0.0 { ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(want)); }
+                    if mon.y > 0.0 {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(want));
+                    }
                 }
             }
         }
         self.poll();
         self.refresh_texture(ctx);
         self.refresh_chart(ctx);
-        if matches!(self.state, State::Running(..)) { ctx.request_repaint_after(std::time::Duration::from_millis(200)); }
+        if matches!(self.state, State::Running(..)) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
 
         // ---------------------------------------------------------------- sidebar
         egui::SidePanel::left("controls")
             .exact_width(352.0)
             .resizable(false)
             .show_separator_line(false)
-            .frame(egui::Frame::none().fill(th::BG).inner_margin(egui::Margin::symmetric(16.0, 16.0)))
+            .frame(
+                egui::Frame::none()
+                    .fill(th::BG)
+                    .inner_margin(egui::Margin::symmetric(16.0, 16.0)),
+            )
             .show(ctx, |ui| {
                 // The side panel needs its own scroll area: in a short window the
                 // 「开始拟合」button ended up below the fold with no way to reach it.
@@ -285,102 +364,181 @@ impl eframe::App for LutApp {
                     .auto_shrink([false, false])
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
-                ui.label(RichText::new("3D LUT 拟合").size(22.0).strong());
-                ui.add_space(2.0);
-                ui.label(RichText::new("把相机的原图和修图后的成品喂进来，\n得到一个 .cube 色彩查找表。")
-                    .size(12.5).color(th::TEXT_DIM));
-                ui.add_space(18.0);
+                        ui.label(RichText::new("3D LUT 拟合").size(22.0).strong());
+                        ui.add_space(2.0);
+                        ui.label(
+                            RichText::new(
+                                "把相机的原图和修图后的成品喂进来，\n得到一个 .cube 色彩查找表。",
+                            )
+                            .size(12.5)
+                            .color(th::TEXT_DIM),
+                        );
+                        ui.add_space(18.0);
 
-                th::section(ui, "① 选择两组图片");
-                ui.add_space(6.0);
-                for (label, hint, value) in [
-                    ("原图", "相机直出 JPG", &mut self.in_dir),
-                    ("修图后", "同一张图修好的版本", &mut self.out_dir),
-                ] {
-                    ui.label(RichText::new(label).size(13.0).color(th::TEXT));
-                    let path = if value.is_empty() { "尚未选择文件夹".to_string() } else { value.clone() };
-                    let col = if value.is_empty() { th::TEXT_DIM } else { th::TEXT };
-                    // One full-width button instead of a row with computed widths: any
-                    // arithmetic here overflows the panel by the scroll bar's width and
-                    // pushes the scroll bar off-screen.
-                    let label = if value.is_empty() {
-                        "选择文件夹…".to_string()
-                    } else {
-                        format!("{}   ⌄", th::ellipsize(&path, 26))
-                    };
-                    let w = (ui.available_width() - 18.0).max(80.0);
-                    if ui.add_sized([w, 32.0],
-                        egui::Button::new(RichText::new(label).size(12.5).color(col)).fill(th::CARD)).clicked() {
-                        if let Some(p) = rfd::FileDialog::new().pick_folder() { *value = p.display().to_string(); }
-                    }
-                    ui.label(RichText::new(hint).size(11.0).color(th::TEXT_DIM));
-                    ui.add_space(10.0);
-                }
-
-                ui.add_space(8.0);
-                th::section(ui, "② 网格尺寸");
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    for s in [17usize, 33, 65] {
-                        if ui.add_sized([66.0, 30.0],
-                            egui::SelectableLabel::new(self.lut_size == s, format!("{s}³"))).clicked() {
-                            self.lut_size = s;
+                        th::section(ui, "① 选择两组图片");
+                        ui.add_space(6.0);
+                        for (label, hint, value) in [
+                            ("原图", "相机直出 JPG", &mut self.in_dir),
+                            ("修图后", "同一张图修好的版本", &mut self.out_dir),
+                        ] {
+                            ui.label(RichText::new(label).size(13.0).color(th::TEXT));
+                            let path = if value.is_empty() {
+                                "尚未选择文件夹".to_string()
+                            } else {
+                                value.clone()
+                            };
+                            let col = if value.is_empty() {
+                                th::TEXT_DIM
+                            } else {
+                                th::TEXT
+                            };
+                            // One full-width button instead of a row with computed widths: any
+                            // arithmetic here overflows the panel by the scroll bar's width and
+                            // pushes the scroll bar off-screen.
+                            let label = if value.is_empty() {
+                                "选择文件夹…".to_string()
+                            } else {
+                                format!("{}   ⌄", th::ellipsize(&path, 26))
+                            };
+                            let w = (ui.available_width() - 18.0).max(80.0);
+                            if ui
+                                .add_sized(
+                                    [w, 32.0],
+                                    egui::Button::new(RichText::new(label).size(12.5).color(col))
+                                        .fill(th::CARD),
+                                )
+                                .clicked()
+                            {
+                                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                                    *value = p.display().to_string();
+                                }
+                            }
+                            ui.label(RichText::new(hint).size(11.0).color(th::TEXT_DIM));
+                            ui.add_space(10.0);
                         }
-                    }
-                });
-                ui.label(RichText::new("33³ 通用；画面色彩复杂用 65³，\n但需要更多图片支撑").size(11.0).color(th::TEXT_DIM));
-                ui.add_space(8.0);
-                ui.checkbox(&mut self.preserve_neutral, RichText::new("保持灰阶中性").size(13.0));
 
-                ui.add_space(18.0);
-                th::section(ui, "③ 开始");
-                ui.add_space(6.0);
-                let running = matches!(self.state, State::Running(..));
-                let can = !running && !self.in_dir.is_empty() && !self.out_dir.is_empty();
-                ui.horizontal(|ui| {
-                    let btn = egui::Button::new(RichText::new("开始拟合").size(15.0).strong().color(Color32::WHITE))
-                        .fill(if can { th::ACCENT } else { th::SEP });
-                    if ui.add_sized([150.0, 42.0], btn).clicked() && can { self.start(); }
-                    if running && ui.add_sized([74.0, 42.0], egui::Button::new("取消")).clicked() {
-                        self.cancel.store(true, Ordering::Relaxed);
-                    }
-                });
+                        ui.add_space(8.0);
+                        th::section(ui, "② 网格尺寸");
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            for s in [17usize, 33, 65] {
+                                if ui
+                                    .add_sized(
+                                        [66.0, 30.0],
+                                        egui::SelectableLabel::new(
+                                            self.lut_size == s,
+                                            format!("{s}³"),
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    self.lut_size = s;
+                                }
+                            }
+                        });
+                        ui.label(
+                            RichText::new("33³ 通用；画面色彩复杂用 65³，\n但需要更多图片支撑")
+                                .size(11.0)
+                                .color(th::TEXT_DIM),
+                        );
+                        ui.add_space(8.0);
+                        ui.checkbox(
+                            &mut self.preserve_neutral,
+                            RichText::new("保持灰阶中性").size(13.0),
+                        );
 
-                if let State::Running(f, msg) = &self.state {
-                    ui.add_space(14.0);
-                    let eta = self.started.map(|t0| {
-                        let el = t0.elapsed().as_secs_f64();
-                        if *f > 0.02 { Some((el, el * (1.0 - f) / f)) } else { Some((el, f64::NAN)) }
-                    }).flatten();
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{:>3.0}%", f * 100.0))
-                            .size(22.0).strong().color(th::ACCENT));
-                        if let Some((_, e)) = eta {
-                            if e.is_finite() {
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    ui.label(RichText::new(format!("还剩 {}", th::mmss(e)))
-                                        .size(13.0).color(th::TEXT_DIM));
-                                });
+                        ui.add_space(18.0);
+                        th::section(ui, "③ 开始");
+                        ui.add_space(6.0);
+                        let running = matches!(self.state, State::Running(..));
+                        let can = !running && !self.in_dir.is_empty() && !self.out_dir.is_empty();
+                        ui.horizontal(|ui| {
+                            let btn = egui::Button::new(
+                                RichText::new("开始拟合")
+                                    .size(15.0)
+                                    .strong()
+                                    .color(Color32::WHITE),
+                            )
+                            .fill(if can {
+                                th::ACCENT
+                            } else {
+                                th::SEP
+                            });
+                            if ui.add_sized([150.0, 42.0], btn).clicked() && can {
+                                self.start();
+                            }
+                            if running
+                                && ui
+                                    .add_sized([74.0, 42.0], egui::Button::new("取消"))
+                                    .clicked()
+                            {
+                                self.cancel.store(true, Ordering::Relaxed);
+                            }
+                        });
+
+                        if let State::Running(f, msg) = &self.state {
+                            ui.add_space(14.0);
+                            let eta = self.started.map(|t0| {
+                                let el = t0.elapsed().as_secs_f64();
+                                if *f > 0.02 {
+                                    (el, el * (1.0 - f) / f)
+                                } else {
+                                    (el, f64::NAN)
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{:>3.0}%", f * 100.0))
+                                        .size(22.0)
+                                        .strong()
+                                        .color(th::ACCENT),
+                                );
+                                if let Some((_, e)) = eta {
+                                    if e.is_finite() {
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    RichText::new(format!("还剩 {}", th::mmss(e)))
+                                                        .size(13.0)
+                                                        .color(th::TEXT_DIM),
+                                                );
+                                            },
+                                        );
+                                    }
+                                }
+                            });
+                            ui.add_space(6.0);
+                            ui.add(
+                                egui::ProgressBar::new(*f as f32)
+                                    .desired_height(8.0)
+                                    .fill(th::ACCENT)
+                                    .rounding(4.0),
+                            );
+                            ui.add_space(6.0);
+                            ui.label(RichText::new(msg).size(12.0).color(th::TEXT));
+                            if let Some((el, _)) = eta {
+                                ui.label(
+                                    RichText::new(format!("已用 {}", th::mmss(el)))
+                                        .size(11.5)
+                                        .color(th::TEXT_DIM),
+                                );
                             }
                         }
-                    });
-                    ui.add_space(6.0);
-                    ui.add(egui::ProgressBar::new(*f as f32).desired_height(8.0)
-                        .fill(th::ACCENT).rounding(4.0));
-                    ui.add_space(6.0);
-                    ui.label(RichText::new(msg).size(12.0).color(th::TEXT));
-                    if let Some((el, _)) = eta {
-                        ui.label(RichText::new(format!("已用 {}", th::mmss(el))).size(11.5).color(th::TEXT_DIM));
-                    }
-                }
-                if let State::Error(e) = &self.state {
-                    ui.add_space(10.0);
-                    ui.colored_label(th::BAD, RichText::new(format!("出错：{e}")).size(12.5));
-                }
-                    if std::env::var("LUTFIT_DEBUG_LAYOUT").is_ok() {
-                        eprintln!("[sidebar] 内容高 {:.0}  视口高 {:.0}",
-                            ui.min_rect().height(), ui.clip_rect().height());
-                    }
+                        if let State::Error(e) = &self.state {
+                            ui.add_space(10.0);
+                            ui.colored_label(
+                                th::BAD,
+                                RichText::new(format!("出错：{e}")).size(12.5),
+                            );
+                        }
+                        if std::env::var("LUTFIT_DEBUG_LAYOUT").is_ok() {
+                            eprintln!(
+                                "[sidebar] 内容高 {:.0}  视口高 {:.0}",
+                                ui.min_rect().height(),
+                                ui.clip_rect().height()
+                            );
+                        }
                     });
             });
 
@@ -477,7 +635,7 @@ impl eframe::App for LutApp {
                                                                       egui::Sense::hover());
                                 ui.painter().rect_filled(rect, 2.0, col.gamma_multiply(0.85));
                                 let mut x = rect.left();
-                                let seg = w as f32 * frac as f32;
+                                let seg = w * frac as f32;
                                 let _ = seg;
                                 x += 0.0;
                                 let _ = x;
@@ -596,7 +754,7 @@ impl eframe::App for LutApp {
                         let imh = colw * CH as f32 / CW as f32;
                         ui.horizontal_top(|ui| {
                             let show_amp = self.amplify;
-                            let mut tile = |ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, cap: &str| {
+                            let tile = |ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, cap: &str| {
                                 ui.vertical(|ui| {
                                     ui.label(RichText::new(cap).size(11.5).color(th::TEXT_DIM));
                                     ui.add_space(3.0);

@@ -72,11 +72,23 @@ pub fn apply(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
 
     style.text_styles = [
-        (TextStyle::Heading, FontId::new(26.0, FontFamily::Proportional)),
+        (
+            TextStyle::Heading,
+            FontId::new(26.0, FontFamily::Proportional),
+        ),
         (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
-        (TextStyle::Button, FontId::new(14.0, FontFamily::Proportional)),
-        (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
-        (TextStyle::Monospace, FontId::new(13.0, FontFamily::Monospace)),
+        (
+            TextStyle::Button,
+            FontId::new(14.0, FontFamily::Proportional),
+        ),
+        (
+            TextStyle::Small,
+            FontId::new(12.0, FontFamily::Proportional),
+        ),
+        (
+            TextStyle::Monospace,
+            FontId::new(13.0, FontFamily::Monospace),
+        ),
     ]
     .into();
 
@@ -87,14 +99,14 @@ pub fn apply(ctx: &egui::Context) {
     v.extreme_bg_color = BG;
     v.override_text_color = Some(TEXT);
     v.window_rounding = Rounding::same(12.0);
-    v.window_stroke = Stroke::new(1.0, SEP);
+    v.window_stroke = Stroke::new(1.0_f32, SEP);
     v.selection.bg_fill = ACCENT.gamma_multiply(0.25);
-    v.selection.stroke = Stroke::new(1.0, ACCENT);
+    v.selection.stroke = Stroke::new(1.0_f32, ACCENT);
 
     let r = Rounding::same(8.0);
     v.widgets.noninteractive.rounding = r;
-    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, SEP);
-    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_DIM);
+    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, SEP);
+    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT_DIM);
 
     v.widgets.inactive.rounding = r;
     // The scroll-bar handle is drawn with `inactive.bg_fill` and its track with
@@ -103,7 +115,7 @@ pub fn apply(ctx: &egui::Context) {
     v.widgets.inactive.bg_fill = Color32::from_rgb(0xC2, 0xC2, 0xC8);
     v.widgets.inactive.weak_bg_fill = Color32::from_rgb(0xE8, 0xE8, 0xED);
     v.widgets.inactive.bg_stroke = Stroke::NONE;
-    v.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT);
+    v.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, TEXT);
 
     v.widgets.hovered.rounding = r;
     v.widgets.hovered.bg_fill = Color32::from_rgb(0xA8, 0xA8, 0xAE);
@@ -117,9 +129,6 @@ pub fn apply(ctx: &egui::Context) {
 
     v.widgets.open.rounding = r;
 
-    // Keep the checkbox box light even though `inactive.bg_fill` is now the (darker)
-    // scroll-handle colour.
-    v.widgets.inactive.bg_fill = v.widgets.inactive.bg_fill;
     style.visuals = v;
     style.spacing.item_spacing = egui::vec2(10.0, 10.0);
     style.spacing.button_padding = egui::vec2(16.0, 9.0);
@@ -133,7 +142,7 @@ pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::none()
         .fill(CARD)
         .rounding(Rounding::same(12.0))
-        .stroke(Stroke::new(1.0, SEP))
+        .stroke(Stroke::new(1.0_f32, SEP))
         .inner_margin(egui::Margin::same(pad))
         .show(ui, |ui| add(ui))
         .inner
@@ -148,16 +157,22 @@ pub fn sub(ui: &mut egui::Ui, text: &str) {
 }
 
 pub fn section(ui: &mut egui::Ui, text: &str) {
-    ui.label(egui::RichText::new(text).size(12.0).strong().color(TEXT_DIM));
+    ui.label(
+        egui::RichText::new(text)
+            .size(12.0)
+            .strong()
+            .color(TEXT_DIM),
+    );
     ui.add_space(2.0);
 }
-
 
 /// Shorten a path for display without hiding which file it is: keep the leading
 /// directory component and the tail.
 pub fn ellipsize(s: &str, max: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max { return s.to_string(); }
+    if chars.len() <= max {
+        return s.to_string();
+    }
     let head: String = chars[..max / 3].iter().collect();
     let tail: String = chars[chars.len() - (max - max / 3 - 1)..].iter().collect();
     format!("{head}…{tail}")
@@ -165,5 +180,9 @@ pub fn ellipsize(s: &str, max: usize) -> String {
 
 pub fn mmss(secs: f64) -> String {
     let s = secs.max(0.0).round() as u64;
-    if s < 60 { format!("{s} 秒") } else { format!("{} 分 {:02} 秒", s / 60, s % 60) }
+    if s < 60 {
+        format!("{s} 秒")
+    } else {
+        format!("{} 分 {:02} 秒", s / 60, s % 60)
+    }
 }

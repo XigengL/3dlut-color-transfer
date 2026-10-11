@@ -44,10 +44,7 @@ def panel(name, crop_frac=(0.0,0.0,1.0,1.0), colw=560):
 
 import sys as _s
 jobs = [
-  ('DSCF2163.JPG', (0.20,0.05,0.80,0.70), 'cmp_DSCF2163.png'),
-  ('_DSC0321.jpg', (0.10,0.10,0.90,0.85), 'cmp_DSC0321.png'),
-  ('DJI_20241003060901_0099_D.JPG', (0.05,0.05,0.95,0.80), 'cmp_DJI0099.png'),
-  ('_DSC0346.jpg', (0.05,0.05,0.95,0.85), 'cmp_DSC0346.png'),
+  # 文件名改为命令行参数；之前这里硬编码了私有素材的照片名与裁切坐标。
 ]
 for name, crop, out in jobs:
     p = panel(name, crop)

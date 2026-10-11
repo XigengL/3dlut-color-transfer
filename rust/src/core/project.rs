@@ -1,7 +1,7 @@
 //! Constraints and projections: monotonicity, fold repair, gamut compression.
 //! Ported from `lutfit/project.py` and `lutfit/verify.py`.
 
-use crate::core::color::{in_gamut, oklab_to_code, code_to_oklab, LUMA};
+use crate::core::color::{code_to_oklab, in_gamut, oklab_to_code, LUMA};
 use crate::core::tetra::{evaluate, nodes_flat, Laplacian};
 
 pub type Px = [f64; 3];
@@ -87,7 +87,10 @@ impl JacobianPenalty {
         };
         for (pi, &(ga, ch)) in DIAG_PAIRS.iter().enumerate() {
             let f = self.diff_field(x, ga, ch);
-            w.diag[pi] = f.iter().map(|&d| if d < floor { 1.0 } else { 0.0 }).collect();
+            w.diag[pi] = f
+                .iter()
+                .map(|&d| if d < floor { 1.0 } else { 0.0 })
+                .collect();
             w.n_viol += w.diag[pi].iter().filter(|&&v| v > 0.0).count();
         }
         let luma = self.luma_field(x);
@@ -128,7 +131,9 @@ impl JacobianPenalty {
         // diagonal pairs
         for (pi, &(ga, ch)) in DIAG_PAIRS.iter().enumerate() {
             let mask = &w.diag[pi];
-            if mask.is_empty() { continue; }
+            if mask.is_empty() {
+                continue;
+            }
             let mut row = 0usize;
             for a in 0..n {
                 for b in 0..n {
@@ -155,7 +160,9 @@ impl JacobianPenalty {
         let luma = self.luma_field(x);
         for ga in 0..3 {
             let mask = &w.luma[ga];
-            if mask.is_empty() { continue; }
+            if mask.is_empty() {
+                continue;
+            }
             let mut row = 0usize;
             for a in 0..n {
                 for b in 0..n {
@@ -300,7 +307,11 @@ fn pava_along(x: &[f64], n: usize, c: usize, ga: usize) -> Option<Vec<f64>> {
             }
         }
     }
-    if changed { Some(out) } else { None }
+    if changed {
+        Some(out)
+    } else {
+        None
+    }
 }
 
 /// Isotonic projection on the Jacobian diagonal and on luma, alternating until no
@@ -318,7 +329,9 @@ pub fn enforce_monotone(x: &[f64], n: usize, iters: usize) -> Vec<f64> {
         // luma: distribute the correction proportionally to the luma weights
         for ga in 0..3 {
             let luma: Vec<f64> = (0..n * n * n)
-                .map(|i| node(&y, i, 0) * LUMA[0] + node(&y, i, 1) * LUMA[1] + node(&y, i, 2) * LUMA[2])
+                .map(|i| {
+                    node(&y, i, 0) * LUMA[0] + node(&y, i, 1) * LUMA[1] + node(&y, i, 2) * LUMA[2]
+                })
                 .collect();
             let mut line_ok = true;
             let idx = |k: usize, j: usize, i: usize| k * n * n + j * n + i;
@@ -332,12 +345,17 @@ pub fn enforce_monotone(x: &[f64], n: usize, iters: usize) -> Vec<f64> {
                             _ => (a, b, t),
                         };
                         let v = luma[idx(k, j, i)];
-                        if !prev.is_nan() && v < prev { line_ok = false; break 'outer; }
+                        if !prev.is_nan() && v < prev {
+                            line_ok = false;
+                            break 'outer;
+                        }
                         prev = v;
                     }
                 }
             }
-            if line_ok { continue; }
+            if line_ok {
+                continue;
+            }
             // project luma then push the delta back into the channels
             let mut newy = y.clone();
             let luma_sq: f64 = LUMA.iter().map(|c| c * c).sum();
@@ -370,7 +388,9 @@ pub fn enforce_monotone(x: &[f64], n: usize, iters: usize) -> Vec<f64> {
             y = newy;
             changed = true;
         }
-        if !changed { break; }
+        if !changed {
+            break;
+        }
     }
     y
 }
@@ -417,8 +437,8 @@ pub fn cell_determinants(x: &[f64], n: usize, h_cell: f64) -> Vec<f64> {
                 }
             }
             let det = j[0][0] * (j[1][1] * j[2][2] - j[1][2] * j[2][1])
-                    - j[0][1] * (j[1][0] * j[2][2] - j[1][2] * j[2][0])
-                    + j[0][2] * (j[1][0] * j[2][1] - j[1][1] * j[2][0]);
+                - j[0][1] * (j[1][0] * j[2][2] - j[1][2] * j[2][0])
+                + j[0][2] * (j[1][0] * j[2][1] - j[1][1] * j[2][0]);
             dets[c * 6 + pi] = det;
         }
     }
@@ -443,11 +463,19 @@ pub fn fold_report(x: &[f64], n: usize) -> FoldReport {
         let mut worst = f64::INFINITY;
         for t in 0..6 {
             let d = dets[c * 6 + t];
-            if d <= 0.0 { folded_tetra += 1; }
-            if d < worst { worst = d; }
-            if d < min_det { min_det = d; }
+            if d <= 0.0 {
+                folded_tetra += 1;
+            }
+            if d < worst {
+                worst = d;
+            }
+            if d < min_det {
+                min_det = d;
+            }
         }
-        if worst <= 0.0 { folded_cells += 1; }
+        if worst <= 0.0 {
+            folded_cells += 1;
+        }
     }
     FoldReport {
         n_cells: nc,
@@ -470,25 +498,38 @@ pub fn repair_folds(x: &[f64], n: usize, iters: usize, target: f64, relax: f64) 
     let mut best_y = y.clone();
     let mut dets = cell_determinants(&y, n, 0.01);
     let count = |d: &Vec<f64>| -> usize {
-        (0..d.len() / 6).filter(|&c| (0..6).any(|t| d[c * 6 + t] <= 0.0)).count()
+        (0..d.len() / 6)
+            .filter(|&c| (0..6).any(|t| d[c * 6 + t] <= 0.0))
+            .count()
     };
     let mut best_folds = count(&dets);
 
     let m = n - 1;
     for _ in 0..iters {
-        if best_folds == 0 { break; }
+        if best_folds == 0 {
+            break;
+        }
         let mut bad = vec![false; m * m * m];
         let mut any = false;
         for c in 0..m * m * m {
-            let worst = (0..6).map(|t| dets[c * 6 + t]).fold(f64::INFINITY, f64::min);
-            if worst <= target { bad[c] = true; any = true; }
+            let worst = (0..6)
+                .map(|t| dets[c * 6 + t])
+                .fold(f64::INFINITY, f64::min);
+            if worst <= target {
+                bad[c] = true;
+                any = true;
+            }
         }
-        if !any { break; }
+        if !any {
+            break;
+        }
         let mut node_mask = vec![false; n * n * n];
         for k in 0..m {
             for j in 0..m {
                 for i in 0..m {
-                    if !bad[k * m * m + j * m + i] { continue; }
+                    if !bad[k * m * m + j * m + i] {
+                        continue;
+                    }
                     for dk in 0..2 {
                         for dj in 0..2 {
                             for di in 0..2 {
@@ -501,10 +542,14 @@ pub fn repair_folds(x: &[f64], n: usize, iters: usize, target: f64, relax: f64) 
         }
         let smoothed = {
             let s = lap.apply(&y);
-            (0..n * n * n * 3).map(|i| y[i] - s[i] / 6.0).collect::<Vec<f64>>()
+            (0..n * n * n * 3)
+                .map(|i| y[i] - s[i] / 6.0)
+                .collect::<Vec<f64>>()
         };
         for nd in 0..n * n * n {
-            if !node_mask[nd] { continue; }
+            if !node_mask[nd] {
+                continue;
+            }
             for c in 0..3 {
                 let t = y[nd * 3 + c] + relax * (smoothed[nd * 3 + c] - y[nd * 3 + c]);
                 y[nd * 3 + c] = t.clamp(0.0, 1.0);
@@ -537,8 +582,12 @@ pub fn monotonicity_report(x: &[f64], n: usize) -> (usize, f64, usize) {
     for &(ga, ch) in &DIAG_PAIRS {
         let f = p.diff_field_pub(x, ga, ch);
         for d in &f {
-            if *d < 0.0 { n_neg += 1; }
-            if *d < min_slope { min_slope = *d; }
+            if *d < 0.0 {
+                n_neg += 1;
+            }
+            if *d < min_slope {
+                min_slope = *d;
+            }
         }
     }
     let luma = p.luma_field_pub(x);
@@ -555,7 +604,9 @@ pub fn monotonicity_report(x: &[f64], n: usize) -> (usize, f64, usize) {
                         _ => (a, b, t),
                     };
                     let v = luma[idx(k, j, i)];
-                    if !prev.is_nan() && v < prev { luma_neg += 1; }
+                    if !prev.is_nan() && v < prev {
+                        luma_neg += 1;
+                    }
                     prev = v;
                 }
             }
@@ -583,7 +634,9 @@ pub fn max_second_difference(x: &[f64], n: usize) -> f64 {
     let steps = 512usize;
     let lines = 5usize;
     let t: Vec<f64> = (0..steps).map(|i| i as f64 / (steps - 1) as f64).collect();
-    let fixed: Vec<f64> = (0..lines).map(|i| 0.05 + 0.9 * i as f64 / (lines - 1) as f64).collect();
+    let fixed: Vec<f64> = (0..lines)
+        .map(|i| 0.05 + 0.9 * i as f64 / (lines - 1) as f64)
+        .collect();
     let mut worst = 0.0f64;
     for &(ax, ch) in &[(0usize, 0usize), (1, 1), (2, 2)] {
         for &u in &fixed {
@@ -605,7 +658,9 @@ pub fn max_second_difference(x: &[f64], n: usize) -> f64 {
                 }
                 for w in d1.windows(2) {
                     let s = (w[1] - w[0]).abs();
-                    if s > worst { worst = s; }
+                    if s > worst {
+                        worst = s;
+                    }
                 }
             }
         }
@@ -637,17 +692,28 @@ pub fn gamut_compress(x: &[f64], p3: bool, steps: usize) -> (Vec<f64>, usize, f6
     let mut max_exc = 0.0f64;
     for i in 0..m {
         let p: Px = [x[i * 3], x[i * 3 + 1], x[i * 3 + 2]];
-        if in_gamut(p, 0.0) { continue; }
+        if in_gamut(p, 0.0) {
+            continue;
+        }
         n_bad += 1;
-        let exc = p.iter().fold(0.0f64, |a, &v| a.max(-v)).max(p.iter().fold(0.0f64, |a, &v| a.max(v - 1.0)));
-        if exc > max_exc { max_exc = exc; }
+        let exc = p
+            .iter()
+            .fold(0.0f64, |a, &v| a.max(-v))
+            .max(p.iter().fold(0.0f64, |a, &v| a.max(v - 1.0)));
+        if exc > max_exc {
+            max_exc = exc;
+        }
         let mut lab = code_to_oklab(p, p3);
         lab[0] = lab[0].clamp(0.0, 1.0);
         let (mut lo, mut hi) = (0.0f64, 1.0f64);
         for _ in 0..steps {
             let mid = 0.5 * (lo + hi);
             let trial = [lab[0], lab[1] * mid, lab[2] * mid];
-            if in_gamut(oklab_to_code(trial, p3), 0.0) { lo = mid; } else { hi = mid; }
+            if in_gamut(oklab_to_code(trial, p3), 0.0) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
         let fixed = oklab_to_code([lab[0], lab[1] * lo, lab[2] * lo], p3);
         for c in 0..3 {
@@ -679,13 +745,19 @@ pub fn polish_lut(
         let m = artifact_metrics(&y, n);
         let key = (m.folds, m.luma_viol, m.max_second);
         history.push(ArtifactMetrics {
-            folds: m.folds, n_tetra: m.n_tetra, min_det: m.min_det,
-            luma_viol: m.luma_viol, mono_viol: m.mono_viol, max_second: m.max_second,
+            folds: m.folds,
+            n_tetra: m.n_tetra,
+            min_det: m.min_det,
+            luma_viol: m.luma_viol,
+            mono_viol: m.mono_viol,
+            max_second: m.max_second,
         });
-        if best.as_ref().map_or(true, |b| key < b.1) {
+        if best.as_ref().is_none_or(|b| key < b.1) {
             best = Some((y.clone(), key));
         }
-        if m.folds == 0 && m.luma_viol == 0 { break; }
+        if m.folds == 0 && m.luma_viol == 0 {
+            break;
+        }
     }
     (best.unwrap().0, history)
 }
@@ -693,7 +765,10 @@ pub fn polish_lut(
 /// Blend the fitted LUT toward identity (`alpha = 1` is the full look).
 pub fn with_strength(x: &[f64], n: usize, alpha: f64) -> Vec<f64> {
     let ident = nodes_flat(n);
-    x.iter().zip(ident.iter()).map(|(a, b)| b + alpha * (a - b)).collect()
+    x.iter()
+        .zip(ident.iter())
+        .map(|(a, b)| b + alpha * (a - b))
+        .collect()
 }
 
 // --------------------------------------------------------------- smoothing ---
@@ -703,7 +778,9 @@ pub fn with_strength(x: &[f64], n: usize, alpha: f64) -> Vec<f64> {
 /// ends (rather than zero-padding) keeps black and white from being dragged toward
 /// grey; a LUT that no longer maps 0 to 0 is a bug, not a smoothing artefact.
 pub fn smooth_lut(x: &[f64], n: usize, strength: f64) -> Vec<f64> {
-    if strength <= 0.0 { return x.to_vec(); }
+    if strength <= 0.0 {
+        return x.to_vec();
+    }
     let sigma = (strength * 0.9).max(1e-6);
     let r = (2.0 * sigma).ceil() as usize;
     let mut k = vec![0.0f64; 2 * r + 1];
@@ -712,7 +789,9 @@ pub fn smooth_lut(x: &[f64], n: usize, strength: f64) -> Vec<f64> {
         *kv = (-0.5 * (d / sigma).powi(2)).exp();
     }
     let s: f64 = k.iter().sum();
-    for kv in k.iter_mut() { *kv /= s; }
+    for kv in k.iter_mut() {
+        *kv /= s;
+    }
 
     let idx = |a: usize, b: usize, c: usize| (a * n * n + b * n + c) * 3;
     let mut cur = x.to_vec();
@@ -723,7 +802,11 @@ pub fn smooth_lut(x: &[f64], n: usize, strength: f64) -> Vec<f64> {
             for b in 0..n {
                 for t in 0..n {
                     let (mut kk, mut jj, mut ii) = (a, b, t);
-                    match axis { 0 => kk = t, 1 => jj = t, _ => ii = t }
+                    match axis {
+                        0 => kk = t,
+                        1 => jj = t,
+                        _ => ii = t,
+                    }
                     let _ = (kk, jj, ii);
                     for c in 0..3 {
                         let mut acc = 0.0;
@@ -737,7 +820,11 @@ pub fn smooth_lut(x: &[f64], n: usize, strength: f64) -> Vec<f64> {
                             };
                             acc += kv * cur[idx(k2, j2, i2) + c];
                         }
-                        let (k2, j2, i2) = match axis { 0 => (t, b, a), 1 => (a, t, b), _ => (a, b, t) };
+                        let (k2, j2, i2) = match axis {
+                            0 => (t, b, a),
+                            1 => (a, t, b),
+                            _ => (a, b, t),
+                        };
                         next[idx(k2, j2, i2) + c] = acc;
                     }
                 }
@@ -761,8 +848,12 @@ impl Banding {
     /// The same curvature expressed in output code levels.  This is the number that
     /// actually decides whether a delivery bands: the identical LUT is fine in 10-bit
     /// and marginal in 8-bit, so an unqualified number says nothing.
-    pub fn levels_8bit(&self) -> f64 { self.max_second * 255.0 }
-    pub fn levels_10bit(&self) -> f64 { self.max_second * 1023.0 }
+    pub fn levels_8bit(&self) -> f64 {
+        self.max_second * 255.0
+    }
+    pub fn levels_10bit(&self) -> f64 {
+        self.max_second * 1023.0
+    }
 }
 
 pub fn banding(x: &[f64], n: usize) -> Banding {
