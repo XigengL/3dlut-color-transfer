@@ -63,7 +63,9 @@ jobs:
           </dict></plist>
           PLIST
           codesign --force --deep --sign - "$APP"
-          cd ../dist && zip -qry "../lut3d-${{ matrix.target }}.zip" lut3d.app
+          # 注意路径：working-directory 是 rust/，但 app 建在 <repo>/dist。
+          # 从 dist 出发，产物要写回 <repo>/rust/ 才能被下面的 upload 找到。
+          ( cd ../dist && zip -qry "../rust/lut3d-${{ matrix.target }}.zip" lut3d.app )
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
@@ -76,6 +78,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: lut3d-${{ matrix.target }}
+          # 默认是 warn——产物没生成时 job 仍然"成功"。改成 error，
+          # 这次 macOS 包静默丢失就是因为这个默认值。
+          if-no-files-found: error
           path: |
             rust/lut3d-${{ matrix.target }}.zip
             rust/lut3d-${{ matrix.target }}.tar.gz
