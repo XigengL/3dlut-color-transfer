@@ -1,9 +1,9 @@
-//! lutfit — 3D LUT fitting tool.
+//! lut3d — 3D LUT fitting tool.
 
 #![allow(clippy::field_reassign_with_default)]
 
-use lutfit::app;
-use lutfit::core::pipeline::{export, run_fit, PipelineOptions, Progress};
+use lut3d::app;
+use lut3d::core::pipeline::{export, run_fit, PipelineOptions, Progress};
 use std::io::Write;
 
 fn main() {
@@ -51,7 +51,7 @@ fn main() {
     }
     if args.len() < 2 || args[1] == "help" || args[1] == "--help" {
         eprintln!("用法:");
-        eprintln!("  lutfit fit <输入文件夹> <目标文件夹> <输出.cube> [lut尺寸]");
+        eprintln!("  lut3d fit <输入文件夹> <目标文件夹> <输出.cube> [lut尺寸]");
         return;
     }
     match args[1].as_str() {
@@ -63,7 +63,7 @@ fn main() {
             let (ind, tgt, out) = (&args[2], &args[3], &args[4]);
             let size: usize = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(33);
             let mut opts = PipelineOptions::default();
-            opts.core = lutfit::core::fit::FitOptions::new(size);
+            opts.core = lut3d::core::fit::FitOptions::new(size);
             let cancel = || false;
             let mut on_stage = |msg: &str, frac: f64| {
                 print!("\r  [{:5.1}%] {:<56}", frac * 100.0, msg);
@@ -87,7 +87,7 @@ fn main() {
                         r.t_stats, r.t_fit, r.t_eval
                     );
                     let mv =
-                        lutfit::core::fit::MATVEC_COUNT.load(std::sync::atomic::Ordering::Relaxed);
+                        lut3d::core::fit::MATVEC_COUNT.load(std::sync::atomic::Ordering::Relaxed);
                     let per = r.t_fit / mv.max(1) as f64 * 1000.0;
                     println!(
                         "  求解器: matvec {mv} 次，平均 {:.3} ms/次，每次约 {:.0} 万次浮点运算",

@@ -13,7 +13,7 @@ if exist dist rmdir /s /q dist
 
 pyinstaller --noconfirm --clean --windowed --onedir ^
   --name "3DLUT" ^
-  --collect-submodules lutfit ^
+  --collect-submodules lut3d ^
   app.py
 
 echo.

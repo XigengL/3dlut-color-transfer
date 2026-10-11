@@ -7,7 +7,7 @@
 mod common;
 use common::{have, max_abs_diff, read_npy};
 
-use lutfit::core::color::{code_to_lab, code_to_oklab, de00, decode_srgb, encode_srgb, Px};
+use lut3d::core::color::{code_to_lab, code_to_oklab, de00, decode_srgb, encode_srgb, Px};
 
 #[test]
 fn ciede2000_matches_sharma_reference() {
@@ -76,7 +76,7 @@ fn tetra_scheme_matches_python() {
     if !have("tests/golden/tetra_pts.npy") {
         return;
     }
-    use lutfit::core::tetra::tetra_scheme;
+    use lut3d::core::tetra::tetra_scheme;
     let (shape, pts) = read_npy("tests/golden/tetra_pts.npy");
     let (_, idx_ref) = read_npy("tests/golden/tetra_idx.npy");
     let (_, w_ref) = read_npy("tests/golden/tetra_w.npy");
@@ -113,7 +113,7 @@ fn tetra_identity_reproduces_input_exactly() {
     }
     // Tetrahedral interpolation is exact for linear fields, so an identity LUT must
     // map every point to itself.
-    use lutfit::core::tetra::{evaluate, nodes_flat};
+    use lut3d::core::tetra::{evaluate, nodes_flat};
     let (_, pts) = read_npy("tests/golden/tetra_pts.npy");
     let np = pts.len() / 3;
     let points: Vec<Px> = (0..np)
@@ -132,7 +132,7 @@ fn tetra_identity_reproduces_input_exactly() {
 
 #[test]
 fn laplacian_annihilates_constant_and_linear_fields() {
-    use lutfit::core::tetra::{nodes_flat, Laplacian};
+    use lut3d::core::tetra::{nodes_flat, Laplacian};
     for &n in &[3usize, 9, 33] {
         let lap = Laplacian::new(n);
         let c = vec![3.7f64; n * n * n * 3];
@@ -161,8 +161,8 @@ fn laplacian_annihilates_constant_and_linear_fields() {
 #[test]
 #[ignore]
 fn end_to_end_matches_python_snapshot() {
-    use lutfit::core::fit::FitOptions;
-    use lutfit::core::pipeline::{run_fit, PipelineOptions, Progress};
+    use lut3d::core::fit::FitOptions;
+    use lut3d::core::pipeline::{run_fit, PipelineOptions, Progress};
 
     // Compare statistics, not the maximum.  Fold repair is a whack-a-mole process, so
     // a handful of nodes always differ; what matters is whether the two LUTs *do* the
@@ -227,13 +227,13 @@ fn end_to_end_matches_python_snapshot() {
             r.previews.len(),
             "{dir_in} 缓存的图对数与预览数不一致"
         );
-        let base = lutfit::core::pipeline::mean_de(
-            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.0),
+        let base = lut3d::core::pipeline::mean_de(
+            &lut3d::core::pipeline::final_lut(&r, 1.0, 0.0),
             &r.eval_cache,
             r.p3,
         );
-        let sm = lutfit::core::pipeline::mean_de(
-            &lutfit::core::pipeline::final_lut(&r, 1.0, 0.8),
+        let sm = lut3d::core::pipeline::mean_de(
+            &lut3d::core::pipeline::final_lut(&r, 1.0, 0.8),
             &r.eval_cache,
             r.p3,
         );
@@ -276,7 +276,7 @@ fn end_to_end_matches_python_snapshot() {
 fn a_system_cjk_font_is_available() {
     use ab_glyph::{Font, FontRef};
     let mut found = Vec::new();
-    for (path, idx) in lutfit::theme::cjk_candidates() {
+    for (path, idx) in lut3d::theme::cjk_candidates() {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(_) => continue,
@@ -311,7 +311,7 @@ fn smoothing_reduces_curvature() {
     if !have("tests/golden/lut_ds1.npy") {
         return;
     }
-    use lutfit::core::project::{banding, max_second_difference, smooth_lut};
+    use lut3d::core::project::{banding, max_second_difference, smooth_lut};
     let (_, lut) = read_npy("tests/golden/lut_ds1.npy");
     let n = 33;
     let base = max_second_difference(&lut, n);
@@ -353,9 +353,9 @@ fn amplification_view_is_not_flat() {
     if !have("tests/golden/lut_ds1.npy") {
         return;
     }
-    use lutfit::core::pipeline::apply_lut;
-    use lutfit::core::project::{amplify_steps, smooth_lut};
-    use lutfit::core::testchart::{sky, stripes, CH, CW, N_B, N_G};
+    use lut3d::core::pipeline::apply_lut;
+    use lut3d::core::project::{amplify_steps, smooth_lut};
+    use lut3d::core::testchart::{sky, stripes, CH, CW, N_B, N_G};
 
     let (_, lut) = read_npy("tests/golden/lut_ds1.npy");
     let n = 33;
@@ -398,7 +398,7 @@ fn amplification_view_is_not_flat() {
 /// and smoothing shows no visible difference.
 #[test]
 fn sky_ramp_has_usable_range() {
-    use lutfit::core::testchart::{sky, CH, CW};
+    use lut3d::core::testchart::{sky, CH, CW};
     let s = sky(CW, CH);
     let lum = |i: usize| {
         0.2126 * s[i * 3] as f64 + 0.7152 * s[i * 3 + 1] as f64 + 0.0722 * s[i * 3 + 2] as f64

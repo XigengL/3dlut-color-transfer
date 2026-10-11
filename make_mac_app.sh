@@ -47,7 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key>                  <string>3DLUT</string>
     <key>CFBundleDisplayName</key>           <string>3D LUT 拟合工具</string>
-    <key>CFBundleIdentifier</key>            <string>local.lutfit.app</string>
+    <key>CFBundleIdentifier</key>            <string>local.lut3d.app</string>
     <key>CFBundleExecutable</key>            <string>3DLUT</string>
     <key>CFBundlePackageType</key>           <string>APPL</string>
     <key>CFBundleSignature</key>             <string>????</string>

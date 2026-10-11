@@ -1,216 +1,292 @@
-# lutfit
+# 3D LUT 色彩迁移
 
-Fit a **single 3D LUT** from paired before/after photographs — camera JPEG in,
-retouched JPEG out. Rust, cross-platform, offline.
+**给两批照片——一批相机原图，一批修图师修好的——自动算出一个 `.cube` 文件。
+以后任何照片套上它，就能得到接近那位修图师的色彩风格。**
 
-The point of this project is not the idea (fitting a LUT from image pairs is not new)
-but the **error accounting**: it tells you how much of the remaining error the fitting
-algorithm could still recover, and how much no global colour transform can ever touch.
-
-- Rust port is verified **numerically equivalent** to an independent Python reference
-  (model error matching to 5 decimal places).
-- ~**9× faster** than the reference implementation (142 s vs 22 min for 87 pairs).
-- Ships as a **5.9 MB** self-contained binary — no Python, no runtime, no bundled fonts.
+全程离线，不联网，不上传任何图片。
 
 ---
 
-## What it does
+## 一、这东西解决什么问题
 
-Give it two folders of the same scenes — one straight out of the camera, one retouched —
-and it produces a `.cube` LUT plus a report on whether that LUT can be trusted.
+假设你（或你的修图师）修了 50 张照片，形成了自己的风格。现在你拍了 500 张新照片，
+想让它们也是那个味道。
 
-```text
-┌─────────────────────────┬──────────────────────────────────────────────┐
-│  3D LUT 拟合             │  ✓ 预检                    46 组图 · 155M 像素 │
-│                         │                                              │
-│  ① 选择两组图片          │    像素质量覆盖   99.99%   真实照片落在有效数据 │
-│  原图     [ 选择文件夹… ] │    色彩网格覆盖   31%      其余是平滑推测      │
-│  修图后   [ 选择文件夹… ] │    外推区改动量   0.074    有数据处为 0.111    │
-│                         │                                              │
-│  ② 网格尺寸              │  拟合质量                                     │
-│  [17³] [33³] [65³]      │  1.01        95 分位色差  2.11                │
-│    33³ 通用              │  ΔE00        模型误差     0.01301            │
-│  ☑ 保持灰阶中性          │              数据下界     0.02692            │
-│                         │              总误差/下界  +11.1%              │
-│  ③ 开始                  │                                              │
-│  [   开始拟合   ]        │  结构检查                                     │
-│                         │  色彩反转 0 处                             │
-│                         │  色带风险 0.00168                          │
-│                         │                                              │
-│                         │  效果预览   （5 张，每列 原图→LUT→成品）      │
-│                         │  平滑      [========|----]  0.60             │
-│                         │  应用强度  [======|------] 100%  [ 导出 .cube ]│
-└─────────────────────────┴──────────────────────────────────────────────┘
+**笨办法**：一张张照着调。500 张，几天就没了。
+
+**聪明办法**：让程序从这 50 组「原图 → 成品」里，总结出一条**通用的颜色换算规则**，
+存成一个很小的文件（`.cube`，几十 KB）。之后任何照片套上这个文件，就自动变成那个风格。
+
+这个程序就是干这件事的。
+
+### 流程
+
+```
+   相机原图 A          修图成品 B
+       │                  │
+       └────────┬─────────┘
+                │  50 组同名文件一一对应
+                ▼
+        ┌───────────────┐
+        │   本程序       │
+        └───────────────┘
+                │
+                ▼
+          style.cube        ← 几十 KB，可用于
+                              达芬奇 / PR / PS / FCPX
 ```
 
-The interface is in Chinese; the code, comments and docs are in English.
+**关键点**：输出的规则**只跟颜色有关，跟位置无关**。所以它能把整张照片的颜色统一改掉，
+但没法做「只提亮画面左上角」这种局部调整。这是原理决定的，不是实现偷懒——
+具体影响见下面「精度能到哪」。
 
 ---
 
-## What it does *not* do
+## 二、三步上手
 
-Being explicit about this matters more than the feature list:
+### 1. 准备图片
 
-- **Ignores ICC profiles.** JPEG code values are treated as the working space verbatim.
-  This is a deliberate choice for data with no trustworthy embedded profile, but it means
-  a Display P3 working space only enters at the display step, not the fit.
-- **JPEG only.** HEIC is unsupported and reported as skipped.
-- **No spatial awareness.** The output is one global colour transform. Local adjustments
-  (gradient masks, brushes, dodge & burn) are unrepresentable *by construction* — this is
-  measured, not assumed: see the error budget below.
-- **No ICC / no colour management on export.** A `.cube` has no colour space tag.
-- Needs **≥ 10 well-aligned pairs** with matching file stems and identical dimensions.
-- The GUI preview is **8-bit** regardless of your display. For 10-bit delivery the numeric
-  readout is authoritative, not the preview.
+两个文件夹，**同一个场景的两张图文件名要一样**：
+
+```
+原图/                          修图后/
+  20240301_001.jpg     ←→      20240301_001.jpg
+  20240301_002.jpg     ←→      20240301_002.jpg
+  ...
+```
+
+- 文件名的**扩展名可以不同**（`A.jpg` 和 `A.png` 也能配上）
+- **两张图的尺寸必须一样**，内容要对齐
+- **至少 10 组**，20–50 组比较合适
+- 建议选**不同场景**的照片（风光、人像、夜景都放一些），别只放同一种
+
+### 2. 跑
+
+打开程序 → 左边选好两个文件夹 → 点「开始拟合」→ 等 1–3 分钟。
+
+### 3. 导出
+
+点「导出 .cube」，把文件拿去达芬奇 / Premiere / Photoshop 里加载。
 
 ---
 
-## Build
+## 三、界面上的数字怎么看
 
-Requires a recent stable Rust (1.76+).
+程序给出的不只是文件，还有一份「这个 LUT 靠不靠谱」的报告。
+**这几个数字比 LUT 本身更值得看。**
+
+### 预检 —— 数据够不够？
+
+| 指标 | 什么意思 | 看什么 |
+|---|---|---|
+| **像素质量覆盖** | 你照片里的颜色，有多少落在「训练时见过」的范围内 | **这个最重要，> 99.5% 就是绿的** |
+| 色彩网格覆盖 | 整个色彩空间里，有多少格子是有数据的 | 30% 也正常，其余靠平滑推测 |
+| 外推区改动量 | 没数据的地方被改动了多少 | 和「有数据处」的数值对比着看 |
+
+> 为什么「色彩网格覆盖」只有 30% 却不担心？因为剩下 70% 的颜色，
+> 真实照片里几乎不会出现。**真正要看的是第一个指标。**
+
+### 拟合质量 —— 准不准？
+
+| 指标 | 什么意思 |
+|---|---|
+| **ΔE00 平均色差** | 套上 LUT 后和修图成品的平均差距。**< 1 肉眼难辨，1–2 轻微，2–4 明显但可接受，> 4 偏色可见** |
+| 95 分位色差 | 最差的那 5% 像素差多少 |
+| 模型误差 | LUT 没能拟合上的部分（算法还有空间的地方） |
+| **数据下界** | **就算换成完美算法也消不掉的部分**（下面详细说） |
+| 总误差 / 下界 | 算法离理论极限有多远。**接近 0 说明已经做得很好了** |
+
+**「数据下界」这个概念很关键**，说明一下：
+
+同一个颜色，你修图的时候可能这次调暖一点、下次调冷一点，尤其是不同照片里
+同一个颜色本来就该不一样。**这种"自相矛盾"是数据本身的，任何只按颜色查表的
+规则都消不掉。** 它就是你精度的天花板。
+
+所以看到 ΔE 是 3.8，不要想着「再优化就能到 1」。得先看下界是多少。
+
+### 结构检查 —— 会不会有瑕疵？
+
+| 指标 | 什么意思 |
+|---|---|
+| **色彩反转** | LUT 里颜色被"翻过去"的地方。**0 处最好**，出现会导致画面出现不该有的色块 |
+| 色带风险 | 渐变里是否会出现可见的色阶条纹。**小于 1 就基本安全** |
+
+---
+
+## 四、它做不到什么
+
+这些是原理或实现决定的，写清楚比藏着好：
+
+| 做不到 | 原因 |
+|---|---|
+| **局部调整**（渐变蒙版、画笔、局部提亮） | 输出的规则只看颜色、不看位置。这是本质限制 |
+| **一个 LUT 应付所有风格** | 如果你 50 张里有一半是暖调、一半是冷调，一个 LUT 只能学"平均" |
+| **读 ICC 色彩配置** | 刻意为之：训练数据里的 ICC 常常不可信。P3 只在**显示**环节生效 |
+| **HEIC 格式** | 不支持，会在报告里标出跳过 |
+| **界面预览显示 10bit** | 预览窗口是 8bit（图形库限制）。**10bit 交付请以数字为准，不要以预览为准** |
+| **色彩管理导出** | `.cube` 文件本身不带色彩空间标签 |
+
+另外，**「一个 LUT 应付所有风格」这一条是可以解决的**——就是按风格分组、每组出一个 LUT。
+但那样你会拿到好几个文件，新照片用哪个需要你自己判断。程序会告诉你**值不值得做**
+（看「图间差异」占比）。
+
+---
+
+## 五、精度能到哪
+
+误差可以精确拆成两块：
+
+```
+总误差² = 模型误差² + 数据下界²
+```
+
+实测两批真实数据：
+
+| | 模型误差 | 数据下界 | 总/下界 |
+|---|---|---|---|
+| 数据集1（46 组，温和调色） | 0.01299 | 0.02692 | **+11.0%** |
+| 数据集2（87 组，强风格化） | 0.03893 | 0.07357 | **+13.1%** |
+
+**模型误差只占 18.5%。** 也就是说：
+
+> **就算把拟合算法做到完美，误差最多再降 10%。**
+
+继续优化算法是没有意义的。想再上一个台阶，只能改变「输出一个 LUT」这个前提。
+
+### 那还有没有空间？取决于你的数据
+
+下界本身还能拆成两块：
+
+| | 图内差异 | 图间差异 |
+|---|---|---|
+| 数据集1 | **68.3%** | 31.7% |
+| 数据集2 | 39.3% | **60.7%** |
+
+- **图内差异** = 同一张照片里的局部调整。**全局 LUT 原理上救不了**
+- **图间差异** = 不同照片修法不一致。**这部分理论上可以用多个 LUT 消掉**
+
+所以：
+
+- 如果你的数据像数据集1（图内 68%）→ **算法已经到顶了，别折腾了**
+- 如果像数据集2（图间 61%）→ 值得考虑按风格分组出多个 LUT
+
+程序每次运行都会报告这个拆分，**先看这一行再决定要不要继续投入**。
+
+---
+
+## 六、原理（简版）
+
+完整推导见 [`rust/DESIGN.md`](rust/DESIGN.md)，这里只说核心。
+
+3D LUT 就是**在色彩空间里撒一堆格子，每格记一个输出颜色**，查询时用周围格子插值。
+
+**整个方法成立的关键，是一句反直觉的话**：
+
+> 一个输入颜色落在哪个格子里，**只取决于输入本身，跟格子里存的值无关**。
+
+所以「插值」这件事，对「格子里该填什么」是**线性**的。于是：
+
+```
+拟合 LUT  =  解一个线性最小二乘问题
+```
+
+本来看着无从下手的「拟合非线性色彩变换」，就变成了一道标准的数学题。
+
+剩下的所有工作——多尺度逐层细化、平滑约束、边界约束、消除色彩反转、消除色带——
+都是为了在**没有数据的地方**、**病态的地方**、**会出瑕疵的地方**，
+把这个解「摁」成一个真能用的文件。
+
+---
+
+## 七、开发
+
+### 从源码构建
+
+需要 Rust 1.76+。
 
 ```bash
 cd rust
 cargo build --release
 ```
 
-**macOS** — produces a self-contained `.app`:
+**macOS** —— 生成独立的 `.app`：
 
 ```bash
-./build_mac.sh          # → dist/lutfit.app  (5.9 MB)
+./build_mac.sh          # → dist/lut3d.app（约 5.9 MB）
 ```
 
-**Windows**:
+**Windows**：
 
 ```bat
-build_win.bat           :: → dist\lutfit.exe
+build_win.bat           :: → dist\lut3d.exe
 ```
 
-No bundled assets. The CJK font is loaded from the system at startup (PingFang /
-Hiragino / Microsoft YaHei / Noto CJK, in that order), which is why the binary stays
-under 6 MB and sidesteps font redistribution licensing entirely.
+不含任何打包资源。中文字体在启动时从系统读取（PingFang / Hiragino /
+微软雅黑 / Noto CJK，按序查找），所以二进制不到 6 MB，也**完全避开了字体授权问题**。
 
----
-
-## Use
+### 命令行用法
 
 ```bash
-./target/release/lutfit                                  # GUI
-./target/release/lutfit fit <原图目录> <修图目录> out.cube 33   # CLI
+./target/release/lut3d                                   # 图形界面
+./target/release/lut3d fit <原图目录> <修图目录> out.cube 33   # 命令行
 ```
 
-Put the same scene's two files under the **same stem** (`A.jpg` / `A.png` both work);
-the extensions may differ.
+### 测试
 
-Then import the `.cube` into Resolve, Premiere, Photoshop, or anything else that reads
-the format.
+```bash
+cd rust
+cargo test --release                        # 数值核心 + 合成数据，秒级到几分钟
+cargo test --release -- --ignored end_to_end # 需要私有图对素材
+```
+
+测试分两层：
+
+**数值核心** —— 与独立的 Python 实现逐项对齐，以及对照公开参考数据
+（CIEDE2000 对 Sharma 等人的 34 对参考值）。
+
+**合成数据恢复** —— 用已知的变换生成数据，验证拟合能否还原它。
+这比「两个实现是否一致」更强，而且不需要任何私有素材。
+
+```
+17³ 网格: 最大误差 0.0198   平均 0.003913   折叠 0
+33³ 网格: 最大误差 0.0098   平均 0.001636   折叠 0
+```
+
+误差随网格变细精确减半，符合预期。
+
+### 项目结构
+
+```
+rust/               主实现
+  src/core/         色彩科学、四面体算子、求解器、约束
+  src/app.rs        图形界面
+  tests/            黄金测试 + 合成数据测试
+  DESIGN.md         算法原理与优化空间分析
+lutfit/             Python 参考实现（仅用于交叉验证）
+tools/              数据集分析与对比脚本
+DESIGN.md           设计前提与取舍
+```
 
 ---
 
-## How it works
+## 八、为什么叫这个名字 / 名字对照
 
-The whole method rests on one observation:
-
-> **Tetrahedral interpolation is linear in the grid values.**
-
-Which cell a query falls into depends only on the input coordinate, never on the values
-stored in the grid. So a colour transform becomes `output = T(u)·x` — a sparse linear
-least-squares problem in ~108k unknowns for a 33³ LUT.
-
-Everything else — multiscale coarse-to-fine, Laplacian regularisation, box constraints,
-fold repair, isotonic projection, adaptive regularisation — is there to keep that solution
-usable where there is no data, where it is ill-posed, and where it would otherwise produce
-colour inversions or banding.
-
-**Full write-up: [`rust/DESIGN.md`](rust/DESIGN.md)** — including the error-budget algebra
-and an explicit list of directions that have been *ruled out* with measurements.
-
----
-
-## Verification
-
-Two independent layers, both runnable in CI:
-
-**Numerical core** (`cargo test --release`, seconds) — checked against a separate Python
-implementation and against published references:
-
-| Test | Bound |
-|---|---|
-| CIEDE2000 vs Sharma et al. 34-pair reference | max error < 1e-4 |
-| sRGB transfer functions vs Python | bit-identical (< 1e-15) |
-| Oklab / CIELAB vs Python | < 1e-12 |
-| Tetrahedral indices and weights (3000 points) | zero mismatches, < 1e-15 |
-| Identity LUT reconstruction, 2³…33³ | < 1e-11 |
-| Laplacian on constant / linear fields | exactly zero |
-
-**Synthetic recovery** (`tests/synthetic.rs`) — asks the stronger question: given data
-generated by a *known* smooth transform, does the fit recover it? No private data needed.
-
-```
-17³ grid: max error 0.0198   mean 0.003913   folds 0
-33³ grid: max error 0.0098   mean 0.001636   folds 0
-```
-
-The error halves as the grid doubles — the expected behaviour, and a check that the
-multiscale hand-off is not losing information.
-
-**End-to-end vs the reference** (`cargo test --release -- --ignored end_to_end`) is
-`#[ignore]`d because it needs paired photographs, which are not in this repository.
-
----
-
-## Accuracy: what is actually achievable
-
-Error decomposes exactly:
-
-```
-total² = model² + irreducible²
-```
-
-|  | model error | irreducible floor | total / floor |
-|---|---|---|---|
-| Dataset 1 — 46 pairs, gentle grade | 0.01299 | 0.02692 | +11.0% |
-| Dataset 2 — 87 pairs, strong grade | 0.03893 | 0.07357 | +13.1% |
-
-The model error is only **18.5% of the squared error**. So a *perfect* fitting algorithm
-would improve RMS by at most **~10%**. Improving the solver further is close to pointless.
-
-The floor itself splits into the part a *set* of LUTs could remove (photos edited
-differently from one another) and the part nothing can (local adjustments inside a single
-photo):
-
-|  | within-image | between-image |
+| 地方 | 名字 | 说明 |
 |---|---|---|
-| Dataset 1 | **68.3%** | 31.7% |
-| Dataset 2 | 39.3% | **60.7%** |
-
-Which is why the honest answer to "is there room to optimise?" is **dataset-dependent** —
-and why the tool reports this split on every run.
-
----
-
-## Repository layout
-
-```
-rust/               the implementation (primary)
-  src/core/         colour science, tetrahedral operator, solver, constraints
-  src/app.rs        GUI
-  tests/            golden + synthetic tests
-  DESIGN.md         method and error analysis
-lutfit/             Python reference implementation
-tools/              dataset analysis and comparison scripts
-```
-
-The Python tree is kept as a **reference implementation** for cross-checking, not as a
-supported path.
+| 仓库 | `3dlut-color-transfer` | |
+| Rust 包 | `lut3d` | **Rust 包名不能以数字开头**，所以换个写法 |
+| 可执行文件 | `lut3d` | |
+| 应用 | `lut3d.app` | |
 
 ---
 
-## License
+## 许可
 
-Dual-licensed under either of
+双许可，任选其一：
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
+- Apache License 2.0（[LICENSE-APACHE](LICENSE-APACHE)）
+- MIT（[LICENSE-MIT](LICENSE-MIT)）
 
-at your option.
+---
+
+[English README](README.en.md)

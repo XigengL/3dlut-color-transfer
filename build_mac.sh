@@ -11,8 +11,8 @@ python -m pip install --quiet -r requirements.txt pyinstaller
 rm -rf build dist
 pyinstaller --noconfirm --clean --windowed --onedir \
   --name "3DLUT-standalone" \
-  --osx-bundle-identifier com.local.lutfit \
-  --collect-submodules lutfit \
+  --osx-bundle-identifier com.local.lut3d \
+  --collect-submodules lut3d \
   app.py
 
 echo

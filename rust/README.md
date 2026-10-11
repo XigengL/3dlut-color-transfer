@@ -1,4 +1,4 @@
-# lutfit — Rust 版实现说明
+# lut3d — Rust 版实现说明
 
 > **入口在 [`../README.md`](../README.md)**（英文，含构建、用法、精度天花板）。
 > 本文是中文的补充材料：与 Python 参考实现的逐项数值对照、分发与打包细节、
@@ -72,20 +72,20 @@ Rust 版是 Python 版的逐行移植，**数值上等价**，不是重写算法
 
 **macOS**
 ```bash
-./build_mac.sh          # → dist/lutfit.app  (5.6 MB)
+./build_mac.sh          # → dist/lut3d.app  (5.6 MB)
 ```
-首次打开若被 Gatekeeper 拦：右键 → 打开，或 `xattr -dr com.apple.quarantine dist/lutfit.app`
+首次打开若被 Gatekeeper 拦：右键 → 打开，或 `xattr -dr com.apple.quarantine dist/lut3d.app`
 
 **Windows**
 ```bat
-build_win.bat           :: → dist\lutfit.exe
+build_win.bat           :: → dist\lut3d.exe
 ```
 
 **手动**
 ```bash
 cargo build --release
-./target/release/lutfit                  # 图形界面
-./target/release/lutfit fit A文件夹 B文件夹 out.cube 33   # 命令行
+./target/release/lut3d                  # 图形界面
+./target/release/lut3d fit A文件夹 B文件夹 out.cube 33   # 命令行
 ```
 
 ## 文档
@@ -110,8 +110,8 @@ cargo build --release
 ## 截图调试钩子
 
 ```bash
-LUTFIT_DEBUG_LAYOUT=1 ./target/release/lutfit --gallery A文件夹 B文件夹 33   # 打印内容高/视口高
-LUTFIT_SCROLL=bottom  ./target/release/lutfit --gallery A文件夹 B文件夹 33   # 打开即滚到底
+LUTFIT_DEBUG_LAYOUT=1 ./target/release/lut3d --gallery A文件夹 B文件夹 33   # 打印内容高/视口高
+LUTFIT_SCROLL=bottom  ./target/release/lut3d --gallery A文件夹 B文件夹 33   # 打开即滚到底
 ```
 
 `--gallery` 会预填路径并自动开始拟合，配合 `screencapture` 可以无人值守地截到运行中和完成态。

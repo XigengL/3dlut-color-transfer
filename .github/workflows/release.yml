@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-arm64
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: windows-latest
+            target: windows-x86_64
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev \
+            libxkbcommon-dev libssl-dev libgl1-mesa-dev
+        working-directory: .
+
+      - run: cargo build --release
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          APP="../dist/lut3d.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp target/release/lut3d "$APP/Contents/MacOS/lut3d"
+          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>lut3d</string>
+            <key>CFBundleIdentifier</key><string>io.github.xigengl.lut3d</string>
+            <key>CFBundleExecutable</key><string>lut3d</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>0.1.0</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          codesign --force --deep --sign - "$APP"
+          cd ../dist && zip -qry "../lut3d-${{ matrix.target }}.zip" lut3d.app
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: tar czf "lut3d-${{ matrix.target }}.tar.gz" -C target/release lut3d
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/release/lut3d.exe -DestinationPath "lut3d-${{ matrix.target }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lut3d-${{ matrix.target }}
+          path: |
+            rust/lut3d-${{ matrix.target }}.zip
+            rust/lut3d-${{ matrix.target }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.zip
+            *.tar.gz
+          body: |
+            ## 下载
+
+            | 你的电脑 | 下载 |
+            |---|---|
+            | Mac（M 系列芯片） | `lut3d-macos-arm64.zip` |
+            | Windows | `lut3d-windows-x86_64.zip` |
+            | Linux | `lut3d-linux-x86_64.tar.gz` |
+
+            ### macOS 首次打开会被系统拦一下
+
+            这个程序没有 Apple 开发者签名（那需要每年 99 美元的账号）。第一次打开时：
+
+            1. 解压后把 `lut3d.app` 拖到「应用程序」
+            2. 打开「终端」，粘贴这一行后回车（末尾有个空格，然后把 app 拖进终端窗口自动补全路径）：
+
+               ```
+               xattr -dr com.apple.quarantine
+               ```
+
+            3. 之后双击就能打开
+
+            macOS 14 及以前也可以：右键点 app → 打开 → 再点一次「打开」。
+
+            ### Windows
+
+            解压后直接双击 `lut3d.exe`。未签名的程序，SmartScreen 可能提示一次，
+            点「更多信息」→「仍要运行」。

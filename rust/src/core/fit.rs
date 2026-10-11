@@ -1,5 +1,5 @@
 //! Multi-scale regularised least-squares fit of an n^3 LUT, with adaptive
-//! regularisation on the final level.  Ported from `lutfit/fit.py`.
+//! regularisation on the final level.  Ported from `lut3d/fit.py`.
 
 use crate::core::project::{
     artifact_metrics, enforce_monotone, fold_report, polish_lut, repair_folds, JacobianPenalty,

@@ -2,7 +2,7 @@
 //!
 //! No colour management is applied: JPEG code values are used verbatim, which is the
 //! correct behaviour for data with no trustworthy embedded profile.  EXIF orientation
-//! *is* applied.  Ported from `lutfit/loader.py`.
+//! *is* applied.  Ported from `lut3d/loader.py`.
 
 use exif::{In, Reader, Tag};
 use image::ImageReader;

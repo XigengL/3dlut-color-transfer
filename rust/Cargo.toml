@@ -1,10 +1,10 @@
 [package]
-name = "lutfit"
+name = "lut3d"
 version = "0.1.0"
 edition = "2021"
-description = "Fit a 3D LUT from paired before/after photographs"
+description = "Generate a 3D LUT colour transfer from paired before/after photographs"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/USER/lutfit"
+repository = "https://github.com/XigengL/3dlut-color-transfer"
 readme = "README.md"
 keywords = ["color", "lut", "photography", "grading"]
 

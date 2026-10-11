@@ -1,6 +1,6 @@
 //! Colour science: sRGB / Display P3, transfer functions, Oklab, CIELAB, CIEDE2000.
 //!
-//! Ported 1:1 from `lutfit/color.py`; the golden tests compare against the Python
+//! Ported 1:1 from `lut3d/color.py`; the golden tests compare against the Python
 //! output bit-for-bit (see `tests/golden.rs`).
 
 pub type Px = [f64; 3];

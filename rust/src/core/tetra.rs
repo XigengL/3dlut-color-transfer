@@ -1,7 +1,7 @@
 //! Tetrahedral interpolation and its sparse linear operator.
 //!
 //! Flat node index is `f = i + j*n + k*n*n` (R varies fastest), which is exactly the
-//! `.cube` ordering.  Ported from `lutfit/tetra.py`.
+//! `.cube` ordering.  Ported from `lut3d/tetra.py`.
 //!
 //! `T(u)` is linear in the node values — which tetrahedron a query falls into depends
 //! only on the input coordinate — so fitting is a sparse linear least-squares problem.

@@ -1,5 +1,5 @@
 //! Constraints and projections: monotonicity, fold repair, gamut compression.
-//! Ported from `lutfit/project.py` and `lutfit/verify.py`.
+//! Ported from `lut3d/project.py` and `lut3d/verify.py`.
 
 use crate::core::color::{code_to_oklab, in_gamut, oklab_to_code, LUMA};
 use crate::core::tetra::{evaluate, nodes_flat, Laplacian};

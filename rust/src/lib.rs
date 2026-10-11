@@ -1,4 +1,4 @@
-//! lutfit — fit a 3D LUT from paired before/after photographs.
+//! lut3d — fit a 3D LUT from paired before/after photographs.
 //!
 //! See `DESIGN.md` for the method and the error analysis.
 

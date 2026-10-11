@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 macOS 上构建 lutfit.app
+# 在 macOS 上构建 lut3d.app
 set -e
 cd "$(dirname "$0")"
 export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
@@ -8,19 +8,19 @@ export PATH="$CARGO_HOME/bin:$PATH"
 
 cargo build --release
 
-APP="dist/lutfit.app"
+APP="dist/lut3d.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp target/release/lutfit "$APP/Contents/MacOS/lutfit"
+cp target/release/lut3d "$APP/Contents/MacOS/lut3d"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleName</key><string>lutfit</string>
+  <key>CFBundleName</key><string>lut3d</string>
   <key>CFBundleDisplayName</key><string>3D LUT 拟合工具</string>
-  <key>CFBundleIdentifier</key><string>local.lutfit.app</string>
-  <key>CFBundleExecutable</key><string>lutfit</string>
+  <key>CFBundleIdentifier</key><string>local.lut3d.app</string>
+  <key>CFBundleExecutable</key><string>lut3d</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
