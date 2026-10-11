@@ -1,4 +1,9 @@
-# lutfit — Rust 版 3D LUT 拟合工具
+# lutfit — Rust 版实现说明
+
+> **入口在 [`../README.md`](../README.md)**（英文，含构建、用法、精度天花板）。
+> 本文是中文的补充材料：与 Python 参考实现的逐项数值对照、分发与打包细节、
+> 界面缺陷的排查记录。算法原理见 [`DESIGN.md`](DESIGN.md)，
+> 需求取舍见 [`../DESIGN.md`](../DESIGN.md)。
 
 把「相机原图」和「修图后」两个文件夹喂进去，输出一个 `.cube`。macOS / Windows / Linux 同一份源码。
 
